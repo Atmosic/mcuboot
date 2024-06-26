@@ -1,4 +1,6 @@
 /*
+ * Portions copyright (c) 2022 Atmosic
+ *
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -67,6 +69,16 @@
 #include "boot_serial/boot_serial.h"
 #include "boot_serial_priv.h"
 #include "mcuboot_config/mcuboot_config.h"
+
+#define ERASE_TYPE_START 0
+#define ERASE_TYPE_PROGRESSIVELY 1
+
+#ifdef MCUBOOT_ERASE_PROGRESSIVELY
+#define ERASE_TYPE ERASE_TYPE_PROGRESSIVELY
+#else
+#define ERASE_TYPE ERASE_TYPE_START
+#endif
+
 #include "../src/bootutil_priv.h"
 
 #ifdef MCUBOOT_ENC_IMAGES
@@ -612,7 +624,12 @@ static off_t erase_range(const struct flash_area *fap, off_t start, off_t end)
     BOOT_LOG_INF("Erasing range 0x%jx:0x%jx", (intmax_t)start,
 		 (intmax_t)(start + size - 1));
 
-    rc = flash_area_erase(fap, start, size);
+#ifdef MCUBOOT_NVM_COND_ERASE
+    rc = flash_area_cond_erase(fap, start, area_size, false);
+#else
+    rc = flash_area_erase(fap, start, area_size);
+#endif
+
     if (rc != 0) {
         BOOT_LOG_ERR("Error %d while erasing range", rc);
         return -EINVAL;
@@ -643,7 +660,7 @@ bs_upload(char *buf, int len)
     struct zcbor_string img_chunk_data;
     size_t decoded = 0;
     bool ok;
-#ifdef MCUBOOT_ERASE_PROGRESSIVELY
+#if (ERASE_TYPE != ERASE_TYPE_START)
     static off_t not_yet_erased = 0;    /* Offset of next byte to erase; writes to flash
                                          * are done in consecutive manner and erases are done
                                          * to allow currently received chunk to be written;
@@ -717,7 +734,7 @@ bs_upload(char *buf, int len)
         const size_t area_size = flash_area_get_size(fap);
 
         curr_off = 0;
-#ifdef MCUBOOT_ERASE_PROGRESSIVELY
+#if (ERASE_TYPE != ERASE_TYPE_START)
         /* Get trailer sector information; this is done early because inability to get
          * that sector information means that upload will not work anyway.
          * TODO: This is single occurrence issue, it should get detected during tests
@@ -744,12 +761,17 @@ bs_upload(char *buf, int len)
 
 #endif
 
-#ifndef MCUBOOT_ERASE_PROGRESSIVELY
+#if (ERASE_TYPE == ERASE_TYPE_START)
         /* Non-progressive erase erases entire image slot when first chunk of
          * an image is received.
          */
-        rc = flash_area_erase(fap, 0, area_size);
-        if (rc) {
+#ifdef MCUBOOT_NVM_COND_ERASE
+        rc = flash_area_cond_erase(fap, start, area_size, false);
+#else
+        rc = flash_area_erase(fap, start, area_size);
+#endif
+
+	if (rc) {
             goto out_invalid_data;
         }
 #else
@@ -769,7 +791,7 @@ bs_upload(char *buf, int len)
         goto out;
     }
 
-#ifdef MCUBOOT_ERASE_PROGRESSIVELY
+#if (ERASE_TYPE != ERASE_TYPE_START)
     /* Progressive erase will erase enough flash, aligned to sector size,
      * as needed for the current chunk to be written.
      */
@@ -845,7 +867,7 @@ bs_upload(char *buf, int len)
     if (rc == 0) {
         curr_off += img_chunk_len + rem_bytes;
         if (curr_off == img_size) {
-#ifdef MCUBOOT_ERASE_PROGRESSIVELY
+#if (ERASE_TYPE != ERASE_TYPE_START)
             /* Assure that sector for image trailer was erased. */
             /* Check whether it was erased during previous upload. */
             off_t start = flash_sector_get_off(&status_sector);

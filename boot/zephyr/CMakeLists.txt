@@ -65,6 +65,11 @@ endif()
  add_subdirectory(${NRFXLIB_DIR} ${PROJECT_BINARY_DIR}/nrfxlib)
 endif()
 
+if(CONFIG_BOOT_USE_MICRO_ECC)
+  set(MICRO_ECC_DIR "${ZEPHYR_BASE}/../modules/crypto/micro-ecc")
+  assert_exists(MICRO_ECC_DIR)
+endif()
+
 zephyr_library_include_directories(
   include
   targets
@@ -176,13 +181,28 @@ if(CONFIG_BOOT_SIGNATURE_TYPE_ECDSA_P256 OR CONFIG_BOOT_ENCRYPT_EC256)
     ${TINYCRYPT_DIR}/include
     )
   zephyr_include_directories(${TINYCRYPT_DIR}/include)
-
   zephyr_library_sources(
-    ${TINYCRYPT_DIR}/source/ecc.c
-    ${TINYCRYPT_DIR}/source/ecc_dsa.c
     ${TINYCRYPT_DIR}/source/sha256.c
     ${TINYCRYPT_DIR}/source/utils.c
     )
+  if (CONFIG_BOOT_USE_MICRO_ECC)
+    # micro-ecc only provides uECC, still need tinycrypts sha code.
+    zephyr_library_include_directories(
+	${MICRO_ECC_DIR}
+      )
+    zephyr_library_sources(
+      ${MICRO_ECC_DIR}/uECC.c
+      )
+    zephyr_compile_options(-DuECC_OPTIMIZATION_LEVEL=${CONFIG_BOOT_MICRO_ECC_OPT_LEVEL})
+    if (CONFIG_BOOT_MICRO_ECC_OPT_LEVEL GREATER_EQUAL 3)
+      zephyr_compile_options(-fomit-frame-pointer)
+    endif()
+  else()
+  zephyr_library_sources(
+    ${TINYCRYPT_DIR}/source/ecc.c
+    ${TINYCRYPT_DIR}/source/ecc_dsa.c
+    )
+  endif() # CONFIG_BOOT_USE_MICRO_ECC
   elseif(CONFIG_BOOT_USE_NRF_CC310_BL)
     zephyr_library_sources(${NRF_DIR}/cc310_glue.c)
     zephyr_library_include_directories(${NRF_DIR})

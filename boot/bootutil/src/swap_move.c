@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2019 JUUL Labs
+ * Copyright (c) 2022 Atmosic
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -361,7 +362,7 @@ boot_move_sector_up(int idx, uint32_t sz, struct boot_loader_state *state,
         assert(rc == 0);
     }
 
-    rc = boot_erase_region(fap_pri, new_off, sz);
+    rc = boot_optional_erase_region(fap_pri, new_off, sz);
     assert(rc == 0);
 
     rc = boot_copy_region(state, fap_pri, fap_pri, old_off, new_off, sz);
@@ -388,7 +389,7 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
     sec_off = boot_img_sector_off(state, BOOT_SECONDARY_SLOT, idx - 1);
 
     if (bs->state == BOOT_STATUS_STATE_0) {
-        rc = boot_erase_region(fap_pri, pri_off, sz);
+        rc = boot_optional_erase_region(fap_pri, pri_off, sz);
         assert(rc == 0);
 
         rc = boot_copy_region(state, fap_sec, fap_pri, sec_off, pri_off, sz);
@@ -400,7 +401,7 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
     }
 
     if (bs->state == BOOT_STATUS_STATE_1) {
-        rc = boot_erase_region(fap_sec, sec_off, sz);
+        rc = boot_optional_erase_region(fap_sec, sec_off, sz);
         assert(rc == 0);
 
         rc = boot_copy_region(state, fap_pri, fap_sec, pri_up_off, sec_off, sz);

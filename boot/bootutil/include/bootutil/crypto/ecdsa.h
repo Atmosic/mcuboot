@@ -38,7 +38,12 @@
     #error "One crypto backend must be defined: either CC310/TINYCRYPT/MBED_TLS/PSA_CRYPTO"
 #endif
 
-#if defined(MCUBOOT_USE_TINYCRYPT)
+#ifdef MCUBOOT_USE_MICRO_ECC
+    #include <uECC.h>
+    #include <tinycrypt/constants.h>
+    /* Number of bytes to represent an element of the the curve p-256: */
+    #define NUM_ECC_BYTES (sizeof(uint32_t) * 8)
+#elif defined(MCUBOOT_USE_TINYCRYPT)
     #include <tinycrypt/ecc_dsa.h>
     #include <tinycrypt/constants.h>
 #endif /* MCUBOOT_USE_TINYCRYPT */

@@ -38,6 +38,14 @@
 #define MCUBOOT_USE_MBED_TLS
 #elif defined(CONFIG_BOOT_USE_TINYCRYPT)
 #define MCUBOOT_USE_TINYCRYPT
+// Micro-ecc only provides ecdsa, tinycrypt must also be enabled.
+#ifdef CONFIG_BOOT_USE_MICRO_ECC
+#define MCUBOOT_USE_MICRO_ECC
+#endif
+// Atmosic SHA2 support is used in conjunction with tinycrypt
+#ifdef CONFIG_BOOT_USE_ATM_SHA2
+#define MCUBOOT_USE_ATM_SHA2
+#endif
 #elif defined(CONFIG_BOOT_USE_CC310)
 #define MCUBOOT_USE_CC310
 #ifdef CONFIG_BOOT_USE_NRF_CC310_BL
@@ -236,6 +244,19 @@
 #if (defined(CONFIG_BOOT_USB_DFU_WAIT) || \
      defined(CONFIG_BOOT_USB_DFU_GPIO))
 #define MCUBOOT_USB_DFU
+#endif
+
+/* This option enables skipping erases when supporting nonvolatile memories
+ * if your platform allow for it.
+ * The conditional erases only applies to image sectors and not to sectors
+ * that contain control information (swap state, headers/trailers)
+ *
+ * Requires an additional API defined in flash_map_backend.h:
+ *    int flash_area_cond_erase(const struct flash_area *, uint32_t off,
+ *        uint32_t len, bool required);
+ */
+#ifdef CONFIG_BOOT_NVM_COND_ERASE
+#define MCUBOOT_NVM_COND_ERASE
 #endif
 
 /*

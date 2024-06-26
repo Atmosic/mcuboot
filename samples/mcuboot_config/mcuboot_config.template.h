@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2018 Open Source Foundries Limited
  * Copyright (c) 2019 Arm Limited
+ * Copyright (c) 2022 Atmosic
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -98,6 +99,15 @@
 /* Default number of separately updateable images; change in case of
  * multiple images. */
 #define MCUBOOT_IMAGE_NUMBER 1
+
+/* Uncomment when supporting multiple nonvolatile memories on your platform
+ * and at least one can write to an area without previously erasing (e.g. RRAM)
+ * and one cannot (e.g. FLASH).
+ *
+ * Requires an additional API defined in flash_map_backend.h:
+ *    int flash_area_cond_erase(const struct flash_area *, uint32_t off, uint32_t len, bool required);
+ */
+/* #define MCUBOOT_NVM_COND_ERASE 1 */
 
 /*
  * Logging

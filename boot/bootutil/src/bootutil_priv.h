@@ -4,6 +4,7 @@
  * Copyright (c) 2017-2020 Linaro LTD
  * Copyright (c) 2017-2019 JUUL Labs
  * Copyright (c) 2019-2021 Arm Limited
+ * Copyright (c) 2022 Atmosic
  *
  * Original license:
  *
@@ -293,6 +294,7 @@ int boot_copy_region(struct boot_loader_state *state,
                      const struct flash_area *fap_dst,
                      uint32_t off_src, uint32_t off_dst, uint32_t sz);
 int boot_erase_region(const struct flash_area *fap, uint32_t off, uint32_t sz);
+int boot_optional_erase_region(const struct flash_area *fap, uint32_t off, uint32_t sz);
 bool boot_status_is_reset(const struct boot_status *bs);
 
 #ifdef MCUBOOT_ENC_IMAGES

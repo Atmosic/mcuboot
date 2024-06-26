@@ -5,6 +5,7 @@
  * Copyright (c) 2016-2019 JUUL Labs
  * Copyright (c) 2019-2023 Arm Limited
  * Copyright (c) 2020-2023 Nordic Semiconductor ASA
+ * Copyright (c) 2022 Atmosic
  *
  * Original license:
  *

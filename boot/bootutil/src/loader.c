@@ -4,6 +4,7 @@
  * Copyright (c) 2016-2020 Linaro LTD
  * Copyright (c) 2016-2019 JUUL Labs
  * Copyright (c) 2019-2023 Arm Limited
+ * Copyright (c) 2022-2023 Atmosic
  *
  * Original license:
  *
@@ -940,6 +941,27 @@ boot_erase_region(const struct flash_area *fap, uint32_t off, uint32_t sz)
     return flash_area_erase(fap, off, sz);
 }
 
+/**
+ * Optionally erases a region of flash. Used for memory devices that dont
+ * need to be erased before writing.
+ *
+ * @param flash_area           The flash_area containing the region to erase.
+ * @param off                   The offset within the flash area to start the
+ *                                  erase.
+ * @param sz                    The number of bytes to erase.
+ *
+ * @return                      0 on success; nonzero on failure.
+ */
+int
+boot_optional_erase_region(const struct flash_area *fap, uint32_t off, uint32_t sz)
+{
+#ifdef MCUBOOT_NVM_COND_ERASE
+    return flash_area_cond_erase(fap, off, sz, false);
+#else
+    return boot_erase_region(fap, off, sz);
+#endif // MCUBOOT_NVM_COND_ERASE
+}
+
 #if !defined(MCUBOOT_DIRECT_XIP) && !defined(MCUBOOT_RAM_LOAD)
 
 #if defined(MCUBOOT_ENC_IMAGES) || defined(MCUBOOT_SWAP_SAVE_ENCTLV)
@@ -1138,7 +1160,8 @@ boot_copy_image(struct boot_loader_state *state, struct boot_status *bs)
     sect_count = boot_img_num_sectors(state, BOOT_PRIMARY_SLOT);
     for (sect = 0, size = 0; sect < sect_count; sect++) {
         this_size = boot_img_sector_size(state, BOOT_PRIMARY_SLOT, sect);
-        rc = boot_erase_region(fap_primary_slot, size, this_size);
+        rc = boot_optional_erase_region(fap_primary_slot, size, this_size);
+        MCUBOOT_WATCHDOG_FEED();
         assert(rc == 0);
 
 #if defined(MCUBOOT_OVERWRITE_ONLY_FAST)
@@ -1162,9 +1185,9 @@ boot_copy_image(struct boot_loader_state *state, struct boot_status *bs)
         sector--;
     } while (sz < trailer_sz);
 
-    rc = boot_erase_region(fap_primary_slot, off, sz);
+    rc = boot_optional_erase_region(fap_primary_slot, off, sz);
     assert(rc == 0);
-#endif
+#endif /* defined(MCUBOOT_OVERWRITE_ONLY_FAST) */
 
 #ifdef MCUBOOT_ENC_IMAGES
     if (IS_ENCRYPTED(boot_img_hdr(state, BOOT_SECONDARY_SLOT))) {

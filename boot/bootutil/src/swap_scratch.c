@@ -2,6 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2019 JUUL Labs
+ * Copyright (c) 2022 Atmosic
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -552,7 +553,7 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
 
     if (bs->state == BOOT_STATUS_STATE_0) {
         BOOT_LOG_DBG("erasing scratch area");
-        rc = boot_erase_region(fap_scratch, 0, flash_area_get_size(fap_scratch));
+        rc = boot_optional_erase_region(fap_scratch, 0, flash_area_get_size(fap_scratch));
         assert(rc == 0);
 
         if (bs->idx == BOOT_STATUS_IDX_0) {
@@ -560,6 +561,9 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
              * scratch area for status.  We need a temporary place to store the
              * `swap-type` while we erase the primary trailer.
              */
+            BOOT_LOG_DBG("erasing scratch area");
+            rc = boot_optional_erase_region(fap_scratch, 0, flash_area_get_size(fap_scratch));
+            assert(rc == 0);
             rc = swap_status_init(state, fap_scratch, bs);
             assert(rc == 0);
 
@@ -591,7 +595,7 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
     }
 
     if (bs->state == BOOT_STATUS_STATE_1) {
-        rc = boot_erase_region(fap_secondary_slot, img_off, sz);
+        rc = boot_optional_erase_region(fap_secondary_slot, img_off, sz);
         assert(rc == 0);
 
         rc = boot_copy_region(state, fap_primary_slot, fap_secondary_slot,
@@ -612,7 +616,7 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
     }
 
     if (bs->state == BOOT_STATUS_STATE_2) {
-        rc = boot_erase_region(fap_primary_slot, img_off, sz);
+        rc = boot_optional_erase_region(fap_primary_slot, img_off, sz);
         assert(rc == 0);
 
         /* NOTE: If this is the final sector, we exclude the image trailer from
@@ -731,6 +735,7 @@ swap_run(struct boot_loader_state *state, struct boot_status *bs,
 
     swap_idx = 0;
     while (last_sector_idx >= 0) {
+        MCUBOOT_WATCHDOG_FEED();
         sz = boot_copy_sz(state, last_sector_idx, &first_sector_idx);
         if (swap_idx >= (bs->idx - BOOT_STATUS_IDX_0)) {
             boot_swap_sectors(first_sector_idx, sz, state, bs);

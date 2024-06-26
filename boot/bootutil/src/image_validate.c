@@ -4,6 +4,7 @@
  * Copyright (c) 2017-2019 Linaro LTD
  * Copyright (c) 2016-2019 JUUL Labs
  * Copyright (c) 2019-2023 Arm Limited
+ * Copyright (c) 2022 Atmosic
  *
  * Original license:
  *
@@ -152,6 +153,7 @@ bootutil_img_hash(struct enc_key_data *enc_state, int image_index,
                 blk_off = (off - hdr_size) & 0xf;
                 boot_encrypt(enc_state, image_index, fap, off - hdr_size,
                         blk_sz, blk_off, tmp_buf);
+                MCUBOOT_WATCHDOG_FEED();
             }
         }
 #endif

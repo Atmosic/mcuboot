@@ -60,7 +60,9 @@
 
 #endif /* MCUBOOT_USE_MBED_TLS */
 
-#if defined(MCUBOOT_USE_TINYCRYPT)
+#ifdef MCUBOOT_USE_ATM_SHA2
+#include "atm_sha2.h"
+#elif defined(MCUBOOT_USE_TINYCRYPT)
     #include <tinycrypt/sha256.h>
     #include <tinycrypt/constants.h>
 #endif /* MCUBOOT_USE_TINYCRYPT */
@@ -147,7 +149,43 @@ static inline int bootutil_sha_finish(bootutil_sha_context *ctx,
 
 #endif /* MCUBOOT_USE_MBED_TLS */
 
-#if defined(MCUBOOT_USE_TINYCRYPT)
+#ifdef MCUBOOT_USE_ATM_SHA2
+
+// Unused
+typedef uint8_t bootutil_sha_context;
+
+static inline void bootutil_sha_init(bootutil_sha_context *ctx)
+{
+    (void)ctx;
+    atm_sha256_params_t const sha256_params = {
+        .mode = ATM_SHA256_SHA_MODE,
+        .byte_endianess = ATM_SHA256_ENDIANESS_BIG,
+        .digest_endianess = ATM_SHA256_ENDIANESS_BIG
+    };
+    atm_sha256_init(&sha256_params);
+}
+
+static inline void bootutil_sha_drop(bootutil_sha_context *ctx)
+{
+    (void)ctx;
+    atm_sha256_disable();
+}
+
+static inline int bootutil_sha_update(bootutil_sha_context *ctx,
+                                         const void *data,
+                                         uint32_t data_len)
+{
+    (void)ctx;
+    return atm_sha256_update_pio(data, data_len);
+}
+
+static inline int bootutil_sha_finish(bootutil_sha_context *ctx,
+                                          uint8_t *output)
+{
+    atm_sha256_final(output);
+    return 0;
+}
+#elif defined(MCUBOOT_USE_TINYCRYPT)
 typedef struct tc_sha256_state_struct bootutil_sha_context;
 
 static inline int bootutil_sha_init(bootutil_sha_context *ctx)
