@@ -7,18 +7,26 @@
 menuconfig MCUBOOT_SERIAL
 	bool "MCUboot serial recovery"
 	default n
+	select MCUBOOT_SERIAL_INTF
 	select REBOOT
 	select SERIAL
 	select UART_INTERRUPT_DRIVEN
 	select BASE64
 	select CRC
 	select ZCBOR
+	depends on !BOOT_FIRMWARE_LOADER
 	help
 	  If y, enables a serial-port based update mode. This allows
 	  MCUboot itself to load update images into flash over a UART.
 	  If unsure, leave at the default value.
 
-if MCUBOOT_SERIAL
+config MCUBOOT_SERIAL_INTF
+	bool
+	default n
+	help
+	  Exposes Serial Adapter config options. Used to enable serial interface
+
+if MCUBOOT_SERIAL_INTF
 
 choice BOOT_SERIAL_DEVICE
 	prompt "Serial device"
@@ -45,22 +53,6 @@ config BOOT_SERIAL_CDC_ACM
 	  the chosen, leaving console on CDC ACM.
 
 endchoice
-
-config MCUBOOT_SERIAL_DIRECT_IMAGE_UPLOAD
-	bool "Allow to select image number for DFU"
-	depends on !SINGLE_APPLICATION_SLOT
-	help
-	  With the option enabled, the mcuboot serial recovery will
-	  respect the "image" field in mcumgr image update frame
-	  header.
-	  The mapping of image number to partition is as follows:
-	    0 -> default behaviour, same as 1;
-	    1 -> image-0 (primary slot of the first image);
-	    2 -> image-1 (secondary slot of the first image);
-	    3 -> image-2;
-	    4 -> image-3.
-	  Note that 0 is default upload target when no explicit
-	  selection is done.
 
 config BOOT_SERIAL_UNALIGNED_BUFFER_SIZE
 	int "Stack buffer for unaligned memory writes"
@@ -95,9 +87,27 @@ config BOOT_SERIAL_MAX_RECEIVE_SIZE
 	  by the number of receive buffers, BOOT_LINE_BUFS to allow for
 	  optimal data transfer speeds).
 
+if MCUBOOT_SERIAL
+
+config MCUBOOT_SERIAL_DIRECT_IMAGE_UPLOAD
+	bool "Allow to select image number for DFU"
+	depends on !SINGLE_APPLICATION_SLOT
+	help
+	  With the option enabled, the mcuboot serial recovery will
+	  respect the "image" field in mcumgr image update frame
+	  header.
+	  The mapping of image number to partition is as follows:
+	    0 -> default behaviour, same as 1;
+	    1 -> image-0 (primary slot of the first image);
+	    2 -> image-1 (secondary slot of the first image);
+	    3 -> image-2;
+	    4 -> image-3.
+	  Note that 0 is default upload target when no explicit
+	  selection is done.
+
 config BOOT_ERASE_PROGRESSIVELY
 	bool "Erase flash progressively when receiving new firmware"
-	default y if SOC_FAMILY_NRF
+	default y if SOC_FAMILY_NORDIC_NRF
 	help
 	 If enabled, flash is erased as necessary when receiving new firmware,
 	 instead of erasing the whole image slot at once. This is necessary
@@ -202,3 +212,4 @@ config BOOT_SERIAL_IMG_GRP_IMAGE_STATE
 	  state command can be used to mark an image as test/confirmed.
 
 endif # MCUBOOT_SERIAL
+endif # MCUBOOT_SERIAL_INTF

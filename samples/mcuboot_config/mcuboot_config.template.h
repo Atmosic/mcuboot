@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2018 Open Source Foundries Limited
- * Copyright (c) 2019 Arm Limited
+ * Copyright (c) 2019-2024 Arm Limited
  * Copyright (c) 2022 Atmosic
  *
  * SPDX-License-Identifier: Apache-2.0
@@ -34,6 +34,18 @@
 /* Uncomment for ECDSA signatures using curve P-256. */
 /* #define MCUBOOT_SIGN_EC256 */
 
+/*
+ * Public key handling
+ *
+ * Choose one or none from the different public key handling options.
+ */
+
+/* Uncomment to use key hash(es) instead of incorporating
+ * the public key into the code. */
+/* #define MCUBOOT_HW_KEY */
+/* Uncomment to use builtin key(s) instead of incorporating
+ * the public key into the code. */
+/* #define MCUBOOT_BUILTIN_KEY */
 
 /*
  * Upgrade mode
@@ -159,7 +171,7 @@
 /* If a OS ports support single thread mode or is bare-metal then:
  * This macro implements call that switches CPU to an idle state, from which
  * the CPU may be woken up by, for example, UART transmission event.
- * 
+ *
  * Otherwise this macro should be no-op.
  */
 #define MCUBOOT_CPU_IDLE() \

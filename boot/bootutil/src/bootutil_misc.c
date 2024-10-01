@@ -268,7 +268,7 @@ boot_read_enc_key(const struct flash_area *fap, uint8_t slot, struct boot_status
 {
     uint32_t off;
 #if MCUBOOT_SWAP_SAVE_ENCTLV
-    int i;
+    uint32_t i;
 #endif
     int rc;
 
@@ -333,7 +333,8 @@ boot_write_enc_key(const struct flash_area *fap, uint8_t slot,
 
 uint32_t bootutil_max_image_size(const struct flash_area *fap)
 {
-#if defined(MCUBOOT_SWAP_USING_SCRATCH) || defined(MCUBOOT_SINGLE_APPLICATION_SLOT)
+#if defined(MCUBOOT_SWAP_USING_SCRATCH) || defined(MCUBOOT_SINGLE_APPLICATION_SLOT) || \
+    defined(MCUBOOT_FIRMWARE_LOADER)
     return boot_status_off(fap);
 #elif defined(MCUBOOT_SWAP_USING_MOVE)
     struct flash_sector sector;
