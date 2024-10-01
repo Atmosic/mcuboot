@@ -132,8 +132,12 @@ def keygen(type, key, password):
 @click.option('-o', '--output', metavar='output', required=False,
               help='Specify the output file\'s name. \
                     The stdout is used if it is not provided.')
+@click.option('-n', '--name', metavar='name', required=False,
+              help='Specify the name of the symbol generated. \
+                    Only valid for c language.')
+
 @click.command(help='Dump public key from keypair')
-def getpub(key, encoding, lang, output):
+def getpub(key, encoding, lang, output, name):
     if encoding and lang:
         raise click.UsageError('Please use only one of `--encoding/-e` '
                                'or `--lang/-l`')
@@ -143,12 +147,15 @@ def getpub(key, encoding, lang, output):
         lang = valid_langs[0]
     key = load_key(key)
 
+    if name and not (lang == 'c' or encoding == 'lang-c'):
+        raise click.UsageError('`--name` is only support with `C` lang')
+
     if not output:
         output = sys.stdout
     if key is None:
         print("Invalid passphrase")
     elif lang == 'c' or encoding == 'lang-c':
-        key.emit_c_public(file=output)
+        key.emit_c_public(file=output, name=name)
     elif lang == 'rust' or encoding == 'lang-rust':
         key.emit_rust_public(file=output)
     elif encoding == 'pem':
@@ -228,6 +235,8 @@ def verify(key, imgfile):
         print("Image has an invalid hash")
     elif ret == image.VerifyResult.INVALID_SIGNATURE:
         print("No signature found for the given key")
+    elif ret == image.VerifyResult.KEY_MISMATCH:
+        print("Key type does not match TLV record")
     else:
         print("Unknown return code: {}".format(ret))
     sys.exit(1)
@@ -377,7 +386,9 @@ class BasedIntParamType(click.ParamType):
               'keyword to automatically generate it from the image version.')
 @click.option('-v', '--version', callback=validate_version,  required=True)
 @click.option('--align', type=click.Choice(['1', '2', '4', '8', '16', '32']),
-              required=True)
+              default='1',
+              required=False,
+              help='Alignment used by swap update modes.')
 @click.option('--max-align', type=click.Choice(['8', '16', '32']),
               required=False,
               help='Maximum flash alignment. Set if flash alignment of the '
