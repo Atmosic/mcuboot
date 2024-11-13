@@ -416,7 +416,7 @@ config BOOT_ENCRYPTION_KEY_FILE
 
 config BOOT_MAX_IMG_SECTORS
 	int "Maximum number of sectors per image slot"
-	default 128 if !SOC_SERIES_ATM33
+	default 128 if !SOC_SERIES_ATM33 && !SOC_SERIES_ATM34
 	help
 	  This option controls the maximum number of sectors that each of
 	  the two image areas can contain. Smaller values reduce MCUboot's
