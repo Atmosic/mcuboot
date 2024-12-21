@@ -597,7 +597,7 @@ endif # BOOT_USB_DFU_GPIO
 
 config BOOT_NVM_COND_ERASE
 	bool "Device supports writing memory without prior erase"
-	default n
+	default y if DT_HAS_ATMOSIC_RRAM_CONTROLLER_ENABLED
 	help
 	    Used when platform supports multiple nonvolatile memories and
 	    at least one supports writing to an area without previously
