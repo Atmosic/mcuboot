@@ -78,6 +78,12 @@ config BOOT_USE_ATM_SHA2
 	default n
 	help
 	  Use Atmosic SHA2 accelerator.
+
+config BOOT_SHA2_ATM
+	bool "Use Atmosic SHA acceleration"
+	select BOOT_USE_ATM_SHA2
+	select ATM_SHA2_HW_BOOTUTIL
+
 endif
 
 menu "MCUBoot settings"
@@ -159,11 +165,6 @@ endchoice
 endif
 
 endchoice
-
-config BOOT_SHA2_ATM
-	bool "Use Atmosic SHA acceleration"
-	select BOOT_USE_ATM_SHA2
-	select ATM_SHA2_HW_BOOTUTIL
 
 config BOOT_SIGNATURE_KEY_FILE
 	string "PEM key file"
