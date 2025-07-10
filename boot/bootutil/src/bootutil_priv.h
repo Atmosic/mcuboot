@@ -52,19 +52,29 @@ struct flash_area;
 
 #define BOOT_TMPBUF_SZ  256
 
+#define NO_ACTIVE_SLOT UINT32_MAX
+
 /** Number of image slots in flash; currently limited to two. */
 #define BOOT_NUM_SLOTS                  2
 
 #if (defined(MCUBOOT_OVERWRITE_ONLY) + \
      defined(MCUBOOT_SWAP_USING_MOVE) + \
+     defined(MCUBOOT_SWAP_USING_OFFSET) + \
      defined(MCUBOOT_DIRECT_XIP) + \
      defined(MCUBOOT_RAM_LOAD) + \
-     defined(MCUBOOT_FIRMWARE_LOADER)) > 1
-#error "Please enable only one of MCUBOOT_OVERWRITE_ONLY, MCUBOOT_SWAP_USING_MOVE, MCUBOOT_DIRECT_XIP, MCUBOOT_RAM_LOAD or MCUBOOT_FIRMWARE_LOADER"
+     defined(MCUBOOT_FIRMWARE_LOADER) + \
+     defined(MCUBOOT_SWAP_USING_SCRATCH)) > 1
+#error "Please enable only one of MCUBOOT_OVERWRITE_ONLY, MCUBOOT_SWAP_USING_MOVE, MCUBOOT_SWAP_USING_OFFSET, MCUBOOT_DIRECT_XIP, MCUBOOT_RAM_LOAD or MCUBOOT_FIRMWARE_LOADER"
+#endif
+
+#if !defined(MCUBOOT_DIRECT_XIP) && \
+     defined(MCUBOOT_DIRECT_XIP_REVERT)
+#error "MCUBOOT_DIRECT_XIP_REVERT cannot be enabled unless MCUBOOT_DIRECT_XIP is used"
 #endif
 
 #if !defined(MCUBOOT_OVERWRITE_ONLY) && \
     !defined(MCUBOOT_SWAP_USING_MOVE) && \
+    !defined(MCUBOOT_SWAP_USING_OFFSET) && \
     !defined(MCUBOOT_DIRECT_XIP) && \
     !defined(MCUBOOT_RAM_LOAD) && \
     !defined(MCUBOOT_SINGLE_APPLICATION_SLOT) && \
@@ -72,8 +82,12 @@ struct flash_area;
 #define MCUBOOT_SWAP_USING_SCRATCH 1
 #endif
 
+#if defined(MCUBOOT_SWAP_USING_OFFSET)
+#define BOOT_STATUS_OP_SWAP     1
+#else
 #define BOOT_STATUS_OP_MOVE     1
 #define BOOT_STATUS_OP_SWAP     2
+#endif
 
 /*
  * Maintain state of copy progress.
@@ -189,6 +203,9 @@ _Static_assert(sizeof(boot_img_magic) == BOOT_MAGIC_SZ, "Invalid size for image 
 #define BOOT_STATUS_MOVE_STATE_COUNT    1
 #define BOOT_STATUS_SWAP_STATE_COUNT    2
 #define BOOT_STATUS_STATE_COUNT         (BOOT_STATUS_MOVE_STATE_COUNT + BOOT_STATUS_SWAP_STATE_COUNT)
+#elif MCUBOOT_SWAP_USING_OFFSET
+#define BOOT_STATUS_SWAP_STATE_COUNT    2
+#define BOOT_STATUS_STATE_COUNT         BOOT_STATUS_SWAP_STATE_COUNT
 #else
 #define BOOT_STATUS_STATE_COUNT         3
 #endif
@@ -234,6 +251,13 @@ struct boot_loader_state {
     uint8_t swap_type[BOOT_IMAGE_NUMBER];
     uint32_t write_sz;
 
+#if defined(MCUBOOT_SWAP_USING_OFFSET)
+    uint32_t secondary_offset[BOOT_IMAGE_NUMBER];
+#if defined(MCUBOOT_BOOTSTRAP)
+    bool bootstrap_secondary_offset_set[BOOT_IMAGE_NUMBER];
+#endif
+#endif
+
 #if defined(MCUBOOT_ENC_IMAGES)
     struct enc_key_data enc[BOOT_IMAGE_NUMBER][BOOT_NUM_SLOTS];
 #endif
@@ -260,8 +284,17 @@ struct boot_loader_state {
 #endif /* MCUBOOT_DIRECT_XIP || MCUBOOT_RAM_LOAD */
 };
 
+/* The function is intended for verification of image hash against
+ * provided signature.
+ */
 fih_ret bootutil_verify_sig(uint8_t *hash, uint32_t hlen, uint8_t *sig,
                             size_t slen, uint8_t key_id);
+
+/* The function is intended for direct verification of image
+ * against provided signature.
+ */
+fih_ret bootutil_verify_img(uint8_t *img, uint32_t size,
+                            uint8_t *sig, size_t slen, uint8_t key_id);
 
 fih_ret boot_fih_memequal(const void *s1, const void *s2, size_t n);
 
@@ -291,10 +324,17 @@ int boot_slots_compatible(struct boot_loader_state *state);
 uint32_t boot_status_internal_off(const struct boot_status *bs, int elem_sz);
 int boot_read_image_header(struct boot_loader_state *state, int slot,
                            struct image_header *out_hdr, struct boot_status *bs);
+#if defined(MCUBOOT_SWAP_USING_OFFSET) && defined(MCUBOOT_ENC_IMAGES)
+int boot_copy_region(struct boot_loader_state *state,
+                     const struct flash_area *fap_src,
+                     const struct flash_area *fap_dst,
+                     uint32_t off_src, uint32_t off_dst, uint32_t sz, uint32_t sector_off);
+#else
 int boot_copy_region(struct boot_loader_state *state,
                      const struct flash_area *fap_src,
                      const struct flash_area *fap_dst,
                      uint32_t off_src, uint32_t off_dst, uint32_t sz);
+#endif
 int boot_erase_region(const struct flash_area *fap, uint32_t off, uint32_t sz);
 int boot_optional_erase_region(const struct flash_area *fap, uint32_t off, uint32_t sz);
 bool boot_status_is_reset(const struct boot_status *bs);
@@ -395,7 +435,7 @@ boot_img_num_sectors(const struct boot_loader_state *state, size_t slot)
 static inline uint32_t
 boot_img_slot_off(struct boot_loader_state *state, size_t slot)
 {
-    return flash_area_get_off(BOOT_IMG(state, slot).area);
+    return flash_area_get_off(BOOT_IMG_AREA(state, slot));
 }
 
 #ifndef MCUBOOT_USE_FLASH_AREA_GET_SECTORS
@@ -463,14 +503,20 @@ struct bootsim_ram_info *bootsim_get_ram_info(void);
 #define LOAD_IMAGE_DATA(hdr, fap, start, output, size)       \
     (memcpy((output),(void*)(IMAGE_RAM_BASE + (hdr)->ih_load_addr + (start)), \
     (size)), 0)
+
+int boot_load_image_to_sram(struct boot_loader_state *state);
 #else
 #define IMAGE_RAM_BASE ((uintptr_t)0)
 
 #define LOAD_IMAGE_DATA(hdr, fap, start, output, size)       \
     (flash_area_read((fap), (start), (output), (size)))
+
 #endif /* MCUBOOT_RAM_LOAD */
 
 uint32_t bootutil_max_image_size(const struct flash_area *fap);
+
+int boot_read_image_size(struct boot_loader_state *state, int slot,
+                         uint32_t *size);
 
 #ifdef __cplusplus
 }
