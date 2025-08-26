@@ -5,7 +5,7 @@
  * Copyright (c) 2016-2019 JUUL Labs
  * Copyright (c) 2019-2023 Arm Limited
  * Copyright (c) 2024-2025 Nordic Semiconductor ASA
- * Copyright (c) 2022-2023 Atmosic
+ * Copyright (c) 2022-2025 Atmosic
  *
  * Original license:
  *
@@ -418,8 +418,21 @@ boot_verify_slot_dependency(struct boot_loader_state *state,
     dep_version = &state->imgs[dep->image_id][dep_slot].hdr.ih_ver;
 
     rc = boot_version_cmp(dep_version, &dep->image_min_version);
+
+    BOOT_LOG_DBG("image id:%d, ver: %d.%d.%d+%d", dep->image_id,
+        dep_version->iv_major, dep_version->iv_minor, dep_version->iv_revision,
+        dep_version->iv_build_num);
+    BOOT_LOG_DBG("--> check against min. ver: %d.%d.%d+%d (rc=%d)",
+        dep->image_min_version.iv_major, dep->image_min_version.iv_minor,
+        dep->image_min_version.iv_revision, dep->image_min_version.iv_build_num,
+        rc);
+
 #if !defined(MCUBOOT_DIRECT_XIP) && !defined(MCUBOOT_RAM_LOAD)
+#ifdef MULTI_IMAGE_VERSIONS_MUST_MATCH
+    if (rc) {
+#else
     if (rc < 0) {
+#endif
         /* Dependency not satisfied.
          * Modify the swap type to decrease the version number of the image
          * (which will be located in the primary slot after the boot process),
