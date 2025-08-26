@@ -2,7 +2,7 @@
  * SPDX-License-Identifier: Apache-2.0
  *
  * Copyright (c) 2018-2019 JUUL Labs
- * Copyright (c) 2019-2023 Arm Limited
+ * Copyright (c) 2019-2024 Arm Limited
  */
 
 #include "mcuboot_config/mcuboot_config.h"
@@ -67,13 +67,13 @@ static int bootutil_constant_time_compare(const uint8_t *a, const uint8_t *b, si
 
 #if defined(MCUBOOT_ENCRYPT_KW)
 static int
-key_unwrap(const uint8_t *wrapped, uint8_t *enckey)
+key_unwrap(const uint8_t *wrapped, uint8_t *enckey, struct bootutil_key *bootutil_enc_key)
 {
     bootutil_aes_kw_context aes_kw;
     int rc;
 
     bootutil_aes_kw_init(&aes_kw);
-    rc = bootutil_aes_kw_set_unwrap_key(&aes_kw, bootutil_enc_key.key, *bootutil_enc_key.len);
+    rc = bootutil_aes_kw_set_unwrap_key(&aes_kw, bootutil_enc_key->key, *bootutil_enc_key->len);
     if (rc != 0) {
         goto done;
     }
@@ -334,7 +334,22 @@ error:
     bootutil_hmac_sha256_drop(&hmac);
     return -1;
 }
-#endif
+#endif /* MCUBOOT_ENCRYPT_EC256 || MCUBOOT_ENCRYPT_X25519 */
+
+#if !defined(MCUBOOT_ENC_BUILTIN_KEY)
+extern const struct bootutil_key bootutil_enc_key;
+
+/*
+ * Default implementation to retrieve the private encryption key which is
+ * embedded in the bootloader code (when MCUBOOT_ENC_BUILTIN_KEY is not defined).
+ */
+int boot_enc_retrieve_private_key(struct bootutil_key **private_key)
+{
+    *private_key = (struct bootutil_key *)&bootutil_enc_key;
+
+    return 0;
+}
+#endif /* !MCUBOOT_ENC_BUILTIN_KEY */
 
 int
 boot_enc_init(struct enc_key_data *enc_state, uint8_t slot)
@@ -347,6 +362,7 @@ int
 boot_enc_drop(struct enc_key_data *enc_state, uint8_t slot)
 {
     bootutil_aes_ctr_drop(&enc_state[slot].aes_ctr);
+    enc_state[slot].valid = 0;
     return 0;
 }
 
@@ -359,7 +375,6 @@ boot_enc_set_key(struct enc_key_data *enc_state, uint8_t slot,
     rc = bootutil_aes_ctr_set_key(&enc_state[slot].aes_ctr, bs->enckey[slot]);
     if (rc != 0) {
         boot_enc_drop(enc_state, slot);
-        enc_state[slot].valid = 0;
         return -1;
     }
 
@@ -415,7 +430,7 @@ static int fake_rng(void *p_rng, unsigned char *output, size_t len)
  * @param enckey An AES-128 or AES-256 key sized buffer to store to plain key.
  */
 int
-boot_enc_decrypt(const uint8_t *buf, uint8_t *enckey)
+boot_decrypt_key(const uint8_t *buf, uint8_t *enckey)
 {
 #if defined(MCUBOOT_ENCRYPT_RSA)
     bootutil_rsa_context rsa;
@@ -441,13 +456,23 @@ boot_enc_decrypt(const uint8_t *buf, uint8_t *enckey)
     uint8_t counter[BOOTUTIL_CRYPTO_AES_CTR_BLOCK_SIZE];
     uint16_t len;
 #endif
+    struct bootutil_key *bootutil_enc_key = NULL;
     int rc = -1;
+
+    rc = boot_enc_retrieve_private_key(&bootutil_enc_key);
+    if (rc) {
+        return rc;
+    }
+
+    if (bootutil_enc_key == NULL) {
+        return rc;
+    }
 
 #if defined(MCUBOOT_ENCRYPT_RSA)
 
     bootutil_rsa_init(&rsa);
-    cp = (uint8_t *)bootutil_enc_key.key;
-    cpend = cp + *bootutil_enc_key.len;
+    cp = (uint8_t *)bootutil_enc_key->key;
+    cpend = cp + *bootutil_enc_key->len;
 
     /* The enckey is encrypted through RSA so for decryption we need the private key */
     rc = bootutil_rsa_parse_private_key(&rsa, &cp, cpend);
@@ -466,15 +491,15 @@ boot_enc_decrypt(const uint8_t *buf, uint8_t *enckey)
 
 #if defined(MCUBOOT_ENCRYPT_KW)
 
-    assert(*bootutil_enc_key.len == BOOT_ENC_KEY_SIZE);
-    rc = key_unwrap(buf, enckey);
+    assert(*bootutil_enc_key->len == BOOT_ENC_KEY_SIZE);
+    rc = key_unwrap(buf, enckey, bootutil_enc_key);
 
 #endif /* defined(MCUBOOT_ENCRYPT_KW) */
 
 #if defined(MCUBOOT_ENCRYPT_EC256)
 
-    cp = (uint8_t *)bootutil_enc_key.key;
-    cpend = cp + *bootutil_enc_key.len;
+    cp = (uint8_t *)bootutil_enc_key->key;
+    cpend = cp + *bootutil_enc_key->len;
 
     /*
      * Load the stored EC256 decryption private key
@@ -500,8 +525,8 @@ boot_enc_decrypt(const uint8_t *buf, uint8_t *enckey)
 
 #if defined(MCUBOOT_ENCRYPT_X25519)
 
-    cp = (uint8_t *)bootutil_enc_key.key;
-    cpend = cp + *bootutil_enc_key.len;
+    cp = (uint8_t *)bootutil_enc_key->key;
+    cpend = cp + *bootutil_enc_key->len;
 
     /*
      * Load the stored X25519 decryption private key
@@ -607,10 +632,15 @@ boot_enc_decrypt(const uint8_t *buf, uint8_t *enckey)
  * Load encryption key.
  */
 int
-boot_enc_load(struct enc_key_data *enc_state, int image_index,
-        const struct image_header *hdr, const struct flash_area *fap,
-        struct boot_status *bs)
+boot_enc_load(struct boot_loader_state *state, int slot,
+              const struct image_header *hdr, const struct flash_area *fap,
+              struct boot_status *bs
+#if defined(MCUBOOT_SWAP_USING_OFFSET) && defined(MCUBOOT_SERIAL_RECOVERY)
+              , uint32_t start_off
+#endif
+             )
 {
+    struct enc_key_data *enc_state = BOOT_CURR_ENC(state);
     uint32_t off;
     uint16_t len;
     struct image_tlv_iter it;
@@ -619,14 +649,7 @@ boot_enc_load(struct enc_key_data *enc_state, int image_index,
 #else
     uint8_t buf[EXPECTED_ENC_LEN];
 #endif
-    uint8_t slot;
     int rc;
-
-    rc = flash_area_id_to_multi_image_slot(image_index, flash_area_get_id(fap));
-    if (rc < 0) {
-        return rc;
-    }
-    slot = rc;
 
     /* Already loaded... */
     if (enc_state[slot].valid) {
@@ -635,6 +658,14 @@ boot_enc_load(struct enc_key_data *enc_state, int image_index,
 
     /* Initialize the AES context */
     boot_enc_init(enc_state, slot);
+
+#if defined(MCUBOOT_SWAP_USING_OFFSET)
+#if defined(MCUBOOT_SERIAL_RECOVERY)
+    it.start_off = boot_get_state_secondary_offset(state, fap) + start_off;
+#else
+    it.start_off = boot_get_state_secondary_offset(state, fap);
+#endif
+#endif
 
     rc = bootutil_tlv_iter_begin(&it, hdr, fap, EXPECTED_ENC_TLV, false);
     if (rc) {
@@ -660,36 +691,23 @@ boot_enc_load(struct enc_key_data *enc_state, int image_index,
         return -1;
     }
 
-    return boot_enc_decrypt(buf, bs->enckey[slot]);
+    return boot_decrypt_key(buf, bs->enckey[slot]);
 }
 
 bool
-boot_enc_valid(struct enc_key_data *enc_state, int image_index,
-        const struct flash_area *fap)
+boot_enc_valid(struct enc_key_data *enc_state, int slot)
 {
-    int rc;
-
-    rc = flash_area_id_to_multi_image_slot(image_index, flash_area_get_id(fap));
-    if (rc < 0) {
-        /* can't get proper slot number - skip encryption, */
-        /* postpone the error for a upper layer */
-        return false;
-    }
-
-    return enc_state[rc].valid;
+    return enc_state[slot].valid;
 }
 
 void
-boot_encrypt(struct enc_key_data *enc_state, int image_index,
-        const struct flash_area *fap, uint32_t off, uint32_t sz,
-        uint32_t blk_off, uint8_t *buf)
+boot_enc_encrypt(struct enc_key_data *enc_state, int slot, uint32_t off,
+             uint32_t sz, uint32_t blk_off, uint8_t *buf)
 {
-    struct enc_key_data *enc;
+    struct enc_key_data *enc = &enc_state[slot];
     uint8_t nonce[16];
-    int rc;
 
-    /* boot_copy_region will call boot_encrypt with sz = 0 when skipping over
-       the TLVs. */
+    /* Nothing to do with size == 0 */
     if (sz == 0) {
        return;
     }
@@ -701,15 +719,31 @@ boot_encrypt(struct enc_key_data *enc_state, int image_index,
     nonce[14] = (uint8_t)(off >> 8);
     nonce[15] = (uint8_t)off;
 
-    rc = flash_area_id_to_multi_image_slot(image_index, flash_area_get_id(fap));
-    if (rc < 0) {
-        assert(0);
-        return;
-    }
-
-    enc = &enc_state[rc];
     assert(enc->valid == 1);
     bootutil_aes_ctr_encrypt(&enc->aes_ctr, nonce, buf, sz, blk_off, buf);
+}
+
+void
+boot_enc_decrypt(struct enc_key_data *enc_state, int slot, uint32_t off,
+             uint32_t sz, uint32_t blk_off, uint8_t *buf)
+{
+    struct enc_key_data *enc = &enc_state[slot];
+    uint8_t nonce[16];
+
+    /* Nothing to do with size == 0 */
+    if (sz == 0) {
+       return;
+    }
+
+    memset(nonce, 0, 12);
+    off >>= 4;
+    nonce[12] = (uint8_t)(off >> 24);
+    nonce[13] = (uint8_t)(off >> 16);
+    nonce[14] = (uint8_t)(off >> 8);
+    nonce[15] = (uint8_t)off;
+
+    assert(enc->valid == 1);
+    bootutil_aes_ctr_decrypt(&enc->aes_ctr, nonce, buf, sz, blk_off, buf);
 }
 
 /**
