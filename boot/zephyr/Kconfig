@@ -1052,4 +1052,12 @@ config MCUBOOT_VERIFY_IMG_ADDRESS
 	  also be useful when BOOT_DIRECT_XIP is enabled, to ensure that the image
 	  linked at the correct address is loaded.
 
+config MULTI_IMAGE_VERSIONS_MUST_MATCH
+	bool "Multi-image versions must match when checking version dependencies"
+	depends on (UPDATEABLE_IMAGE_NUMBER > 1) && !BOOT_DIRECT_XIP && !BOOT_RAM_LOAD
+	help
+	  By default, multi-image version dependencies only require a minimum version match.
+	  Enable this option to require the dependencies to be satified only when the images
+	  are the same (matching) version.
+
 source "Kconfig.zephyr"

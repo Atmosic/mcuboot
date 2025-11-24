@@ -464,4 +464,10 @@
     k_cpu_idle(); \
   }
 
+/* When using multiple images with version dependencies, this requires an exact
+   match rather than a minimum version */
+#ifdef CONFIG_MULTI_IMAGE_VERSIONS_MUST_MATCH
+#define MULTI_IMAGE_VERSIONS_MUST_MATCH
+#endif
+
 #endif /* __MCUBOOT_CONFIG_H__ */
