@@ -6,7 +6,6 @@
 
 menuconfig MCUBOOT_SERIAL
 	bool "MCUboot serial recovery"
-	default n
 	select MCUBOOT_SERIAL_INTF
 	select REBOOT
 	select SERIAL
@@ -54,6 +53,23 @@ config BOOT_SERIAL_CDC_ACM
 
 endchoice
 
+config MCUBOOT_SERIAL_DIRECT_IMAGE_UPLOAD
+	bool "Allow to select image number for DFU"
+	depends on MCUBOOT_SERIAL
+	depends on !SINGLE_APPLICATION_SLOT
+	help
+	  With the option enabled, the mcuboot serial recovery will
+	  respect the "image" field in mcumgr image update frame
+	  header.
+	  The mapping of image number to partition is as follows:
+	    0 -> default behaviour, same as 1;
+	    1 -> image-0 (primary slot of the first image);
+	    2 -> image-1 (secondary slot of the first image);
+	    3 -> image-2;
+	    4 -> image-3.
+	  Note that 0 is default upload target when no explicit
+	  selection is done.
+
 config BOOT_SERIAL_UNALIGNED_BUFFER_SIZE
 	int "Stack buffer for unaligned memory writes"
 	default 512 if SOC_SERIES_LPC55XXX
@@ -90,22 +106,6 @@ config BOOT_SERIAL_MAX_RECEIVE_SIZE
 	  optimal data transfer speeds).
 
 if MCUBOOT_SERIAL
-
-config MCUBOOT_SERIAL_DIRECT_IMAGE_UPLOAD
-	bool "Allow to select image number for DFU"
-	depends on !SINGLE_APPLICATION_SLOT
-	help
-	  With the option enabled, the mcuboot serial recovery will
-	  respect the "image" field in mcumgr image update frame
-	  header.
-	  The mapping of image number to partition is as follows:
-	    0 -> default behaviour, same as 1;
-	    1 -> image-0 (primary slot of the first image);
-	    2 -> image-1 (secondary slot of the first image);
-	    3 -> image-2;
-	    4 -> image-3.
-	  Note that 0 is default upload target when no explicit
-	  selection is done.
 
 config BOOT_ERASE_PROGRESSIVELY
 	bool "Erase flash progressively when receiving new firmware"

@@ -135,15 +135,11 @@ boot_decrypt_and_copy_image_to_sram(struct boot_loader_state *state,
     uint32_t max_sz = 1024;
     uint16_t idx;
     uint8_t * cur_dst;
-    int area_id;
     int rc;
     uint8_t * ram_dst = (void *)(IMAGE_RAM_BASE + img_dst);
 
-    area_id = flash_area_id_from_multi_image_slot(BOOT_CURR_IMG(state), slot);
-    rc = flash_area_open(area_id, &fap_src);
-    if (rc != 0){
-        return BOOT_EFLASH;
-    }
+    fap_src = BOOT_IMG_AREA(state, slot);
+    assert(fap_src != NULL);
 
     tlv_off = BOOT_TLV_OFF(hdr);
 
@@ -159,7 +155,7 @@ boot_decrypt_and_copy_image_to_sram(struct boot_loader_state *state,
     }
 
     /* if rc > 0 then the key has already been loaded */
-    if (rc == 0 && boot_enc_set_key(BOOT_CURR_ENC(state), slot, &bs)) {
+    if (rc == 0 && boot_enc_set_key(BOOT_CURR_ENC_SLOT(state, slot), bs.enckey[slot])) {
         goto done;
     }
 
@@ -180,7 +176,7 @@ boot_decrypt_and_copy_image_to_sram(struct boot_loader_state *state,
              * Part of the chunk is encrypted payload */
             blk_sz = tlv_off - (bytes_copied);
         }
-        boot_enc_decrypt(BOOT_CURR_ENC(state), slot,
+        boot_enc_decrypt(BOOT_CURR_ENC_SLOT(state, slot),
                 (bytes_copied + idx) - hdr->ih_hdr_size, blk_sz,
                 blk_off, cur_dst);
         bytes_copied += chunk_sz;
@@ -188,8 +184,6 @@ boot_decrypt_and_copy_image_to_sram(struct boot_loader_state *state,
     rc = 0;
 
 done:
-    flash_area_close(fap_src);
-
     return rc;
 }
 
@@ -211,18 +205,13 @@ boot_copy_image_to_sram(struct boot_loader_state *state, int slot,
 {
     int rc;
     const struct flash_area *fap_src = NULL;
-    int area_id;
 
 #if (BOOT_IMAGE_NUMBER == 1)
     (void)state;
 #endif
 
-    area_id = flash_area_id_from_multi_image_slot(BOOT_CURR_IMG(state), slot);
-
-    rc = flash_area_open(area_id, &fap_src);
-    if (rc != 0) {
-        return BOOT_EFLASH;
-    }
+    fap_src = BOOT_IMG_AREA(state, slot);
+    assert(fap_src != NULL);
 
     /* Direct copy from flash to its new location in SRAM. */
     rc = flash_area_read(fap_src, 0, (void *)(IMAGE_RAM_BASE + img_dst), img_sz);
@@ -230,8 +219,6 @@ boot_copy_image_to_sram(struct boot_loader_state *state, int slot,
         BOOT_LOG_INF("Error whilst copying image %d from Flash to SRAM: %d",
                      BOOT_CURR_IMG(state), rc);
     }
-
-    flash_area_close(fap_src);
 
     return rc;
 }
@@ -287,7 +274,7 @@ boot_check_ram_load_overlapping(struct boot_loader_state *state)
     end_a = start_a + state->slot_usage[image_id_to_check].img_sz;
 
     for (i = 0; i < BOOT_IMAGE_NUMBER; i++) {
-        if (state->slot_usage[i].active_slot == NO_ACTIVE_SLOT
+        if (state->slot_usage[i].active_slot == BOOT_SLOT_NONE
             || i == image_id_to_check) {
             continue;
         }
@@ -421,26 +408,19 @@ boot_remove_image_from_sram(struct boot_loader_state *state)
 int
 boot_remove_image_from_flash(struct boot_loader_state *state, uint32_t slot)
 {
-    int area_id;
-    int rc;
     const struct flash_area *fap;
-
-    (void)state;
 
     BOOT_LOG_INF("Removing image %d slot %d from flash", BOOT_CURR_IMG(state),
                                                          slot);
-    area_id = flash_area_id_from_multi_image_slot(BOOT_CURR_IMG(state), slot);
-    rc = flash_area_open(area_id, &fap);
-    if (rc == 0) {
-        flash_area_erase(fap, 0, flash_area_get_size(fap));
-        flash_area_close(fap);
-    }
+    fap = BOOT_IMG_AREA(state, slot);
+    assert(fap != NULL);
 
-    return rc;
+    return boot_scramble_slot(fap, slot);
 }
 
 int boot_load_image_from_flash_to_sram(struct boot_loader_state *state,
-                                       struct image_header *hdr)
+                                       struct image_header *hdr,
+                                       const struct flash_area *fap)
 {
     int active_slot;
 
@@ -449,6 +429,7 @@ int boot_load_image_from_flash_to_sram(struct boot_loader_state *state,
      */
     active_slot = state->slot_usage[BOOT_CURR_IMG(state)].active_slot;
     BOOT_IMG(state, active_slot).hdr = *hdr;
+    BOOT_IMG_AREA(state, active_slot) = fap;
 
     return boot_load_image_to_sram(state);
 }

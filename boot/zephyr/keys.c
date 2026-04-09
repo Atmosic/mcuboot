@@ -41,6 +41,21 @@ extern unsigned int ecdsa_pub_key_len;
 extern const unsigned char ed25519_pub_key[];
 extern unsigned int ed25519_pub_key_len;
 #endif
+
+/* Additional keys for multiple key support */
+/* Variable names match imgtool.py getpub --name {type}_2 output format */
+#if defined(CONFIG_BOOT_MULTIPLE_SIGNATURE_KEYS)
+#if defined(MCUBOOT_SIGN_RSA)
+extern const unsigned char rsa_2_pub_key[];
+extern unsigned int rsa_2_pub_key_len;
+#elif defined(MCUBOOT_SIGN_EC256)
+extern const unsigned char ecdsa_2_pub_key[];
+extern unsigned int ecdsa_2_pub_key_len;
+#elif defined(MCUBOOT_SIGN_ED25519)
+extern const unsigned char ed25519_2_pub_key[];
+extern unsigned int ed25519_2_pub_key_len;
+#endif
+#endif /* CONFIG_BOOT_MULTIPLE_SIGNATURE_KEYS */
 #endif
 
 /*
@@ -49,6 +64,37 @@ extern unsigned int ed25519_pub_key_len;
  *       provided and added to the build manually.
  */
 #if defined(HAVE_KEYS)
+#if defined(CONFIG_BOOT_MULTIPLE_SIGNATURE_KEYS)
+/* Multiple keys support - maximum of 2 keys */
+const struct bootutil_key bootutil_keys[2] = {
+    {
+#if defined(MCUBOOT_SIGN_RSA)
+        .key = rsa_pub_key,
+        .len = &rsa_pub_key_len,
+#elif defined(MCUBOOT_SIGN_EC256)
+        .key = ecdsa_pub_key,
+        .len = &ecdsa_pub_key_len,
+#elif defined(MCUBOOT_SIGN_ED25519)
+        .key = ed25519_pub_key,
+        .len = &ed25519_pub_key_len,
+#endif
+    },
+    {
+#if defined(MCUBOOT_SIGN_RSA)
+        .key = rsa_2_pub_key,
+        .len = &rsa_2_pub_key_len,
+#elif defined(MCUBOOT_SIGN_EC256)
+        .key = ecdsa_2_pub_key,
+        .len = &ecdsa_2_pub_key_len,
+#elif defined(MCUBOOT_SIGN_ED25519)
+        .key = ed25519_2_pub_key,
+        .len = &ed25519_2_pub_key_len,
+#endif
+    },
+};
+const int bootutil_key_cnt = 2;
+#else
+/* Single key support (original behavior) */
 const struct bootutil_key bootutil_keys[] = {
     {
 #if defined(MCUBOOT_SIGN_RSA)
@@ -64,6 +110,7 @@ const struct bootutil_key bootutil_keys[] = {
     },
 };
 const int bootutil_key_cnt = 1;
+#endif /* CONFIG_BOOT_MULTIPLE_SIGNATURE_KEYS */
 #endif /* HAVE_KEYS */
 #else
 unsigned int pub_key_len;

@@ -34,24 +34,20 @@
 #     error "One crypto library implementation allowed at a time."
 #endif
 
+#if defined(CONFIG_BOOT_KEY_IMPORT_BYPASS_ASN)
+#define MCUBOOT_KEY_IMPORT_BYPASS_ASN
+#endif
+
 #ifdef CONFIG_BOOT_USE_MBEDTLS
 #define MCUBOOT_USE_MBED_TLS
 #elif defined(CONFIG_BOOT_USE_TINYCRYPT)
 #define MCUBOOT_USE_TINYCRYPT
-// Micro-ecc only provides ecdsa, tinycrypt must also be enabled.
-#ifdef CONFIG_BOOT_USE_MICRO_ECC
-#define MCUBOOT_USE_MICRO_ECC
-#endif
-// Atmosic SHA2 support is used in conjunction with tinycrypt
-#ifdef CONFIG_BOOT_USE_ATM_SHA2
-#define MCUBOOT_USE_ATM_SHA2
-#endif
 #elif defined(CONFIG_BOOT_USE_CC310)
 #define MCUBOOT_USE_CC310
 #ifdef CONFIG_BOOT_USE_NRF_CC310_BL
 #define MCUBOOT_USE_NRF_CC310_BL
 #endif
-#elif defined(CONFIG_MBEDTLS_PSA_CRYPTO_CLIENT)
+#elif defined(CONFIG_BOOT_USE_PSA_CRYPTO)
 #define MCUBOOT_USE_PSA_CRYPTO
 #endif
 
@@ -104,6 +100,10 @@
 #define MCUBOOT_DIRECT_XIP_REVERT
 #endif
 
+#ifdef CONFIG_BOOT_RAM_LOAD_REVERT
+#define MCUBOOT_RAM_LOAD_REVERT
+#endif
+
 #ifdef CONFIG_BOOT_RAM_LOAD
 #define MCUBOOT_RAM_LOAD 1
 #define IMAGE_EXECUTABLE_RAM_START CONFIG_BOOT_IMAGE_EXECUTABLE_RAM_START
@@ -138,8 +138,17 @@
 #define IMAGE_EXECUTABLE_RAM_SIZE CONFIG_BOOT_IMAGE_EXECUTABLE_RAM_SIZE
 #endif
 
+#ifdef CONFIG_MULTIPLE_EXECUTABLE_RAM_REGIONS
+#define MULTIPLE_EXECUTABLE_RAM_REGIONS
+#endif
+
 #ifdef CONFIG_LOG
 #define MCUBOOT_HAVE_LOGGING 1
+#endif
+
+/* Enable/disable non-protected TLV check against allow list */
+#ifdef CONFIG_MCUBOOT_USE_TLV_ALLOW_LIST
+#define MCUBOOT_USE_TLV_ALLOW_LIST 1
 #endif
 
 #ifdef CONFIG_BOOT_ENCRYPT_RSA
@@ -155,6 +164,30 @@
 #ifdef CONFIG_BOOT_ENCRYPT_X25519
 #define MCUBOOT_ENC_IMAGES
 #define MCUBOOT_ENCRYPT_X25519
+#endif
+
+#ifdef CONFIG_BOOT_ENCRYPT_ALG_AES_128
+#define MCUBOOT_AES_128
+#endif
+
+#ifdef CONFIG_BOOT_ENCRYPT_ALG_AES_256
+#define MCUBOOT_AES_256
+#endif
+
+/* Support for HMAC/HKDF using SHA512; this is used in key exchange where
+ * HKDF is used for key expansion and HMAC is used for key verification.
+ */
+#ifdef CONFIG_BOOT_HMAC_SHA512
+#define MCUBOOT_HMAC_SHA512
+#endif
+
+/* Turn off check of public key hash against compiled in key
+ * before attempting signature verification. When there is only
+ * one key, matching is pointless, the signature may just be
+ * verified with the only key that there is.
+ */
+#ifdef CONFIG_BOOT_BYPASS_KEY_MATCH
+#define MCUBOOT_BYPASS_KEY_MATCH
 #endif
 
 #ifdef CONFIG_BOOT_DECOMPRESSION
@@ -194,6 +227,18 @@
 
 #ifdef CONFIG_MCUBOOT_HW_DOWNGRADE_PREVENTION
 #define MCUBOOT_HW_ROLLBACK_PROT
+#endif
+
+#ifdef CONFIG_MCUBOOT_HW_DOWNGRADE_PREVENTION_COUNTER_LIMITED
+#define MCUBOOT_HW_ROLLBACK_PROT_COUNTER_LIMITED
+#endif
+
+#ifdef CONFIG_MCUBOOT_UUID_VID
+#define MCUBOOT_UUID_VID
+#endif
+
+#ifdef CONFIG_MCUBOOT_UUID_CID
+#define MCUBOOT_UUID_CID
 #endif
 
 #ifdef CONFIG_MEASURED_BOOT
@@ -238,10 +283,6 @@
 #define MCUBOOT_PERUSER_MGMT_GROUP_ENABLED 0
 #endif
 
-#ifdef CONFIG_BOOT_MGMT_CUSTOM_IMG_LIST
-#define MCUBOOT_MGMT_CUSTOM_IMG_LIST
-#endif
-
 #ifdef CONFIG_BOOT_MGMT_ECHO
 #define MCUBOOT_BOOT_MGMT_ECHO
 #endif
@@ -256,6 +297,14 @@
 
 #ifdef CONFIG_BOOT_FLASH_AREA_HOOKS
 #define MCUBOOT_FLASH_AREA_HOOKS
+#endif
+
+#ifdef CONFIG_FIND_NEXT_SLOT_HOOKS
+#define MCUBOOT_FIND_NEXT_SLOT_HOOKS
+#endif
+
+#ifdef CONFIG_MCUBOOT_CHECK_HEADER_LOAD_ADDRESS
+#define MCUBOOT_CHECK_HEADER_LOAD_ADDRESS
 #endif
 
 #ifdef CONFIG_MCUBOOT_VERIFY_IMG_ADDRESS
@@ -299,19 +348,6 @@
 #define MCUBOOT_USB_DFU
 #endif
 
-/* This option enables skipping erases when supporting nonvolatile memories
- * if your platform allow for it.
- * The conditional erases only applies to image sectors and not to sectors
- * that contain control information (swap state, headers/trailers)
- *
- * Requires an additional API defined in flash_map_backend.h:
- *    int flash_area_cond_erase(const struct flash_area *, uint32_t off,
- *        uint32_t len, bool required);
- */
-#ifdef CONFIG_BOOT_NVM_COND_ERASE
-#define MCUBOOT_NVM_COND_ERASE
-#endif
-
 /*
  * The option enables code, currently in boot_serial, that attempts
  * to erase flash progressively, as update fragments are received,
@@ -322,6 +358,29 @@
  */
 #ifdef CONFIG_BOOT_ERASE_PROGRESSIVELY
 #define MCUBOOT_ERASE_PROGRESSIVELY
+#endif
+
+/*
+ * Devices that do not require erase prior to write or do not support
+ * erase should avoid emulation of erase by additional write.
+ * The emulation is also taking time which doubles required write time
+ * for such devices.
+ */
+#ifdef CONFIG_MCUBOOT_STORAGE_WITHOUT_ERASE
+#define MCUBOOT_SUPPORT_DEV_WITHOUT_ERASE
+#endif
+
+#ifdef CONFIG_MCUBOOT_STORAGE_WITH_ERASE
+#define MCUBOOT_SUPPORT_DEV_WITH_ERASE
+#endif
+
+/*
+ * MCUboot often calls erase on device just to remove data or make application
+ * image not recognizable. In such instances it may be faster to just remove
+ * portion of data to make image unrecognizable.
+ */
+#ifdef CONFIG_MCUBOOT_STORAGE_MINIMAL_SCRAMBLE
+#define MCUBOOT_MINIMAL_SCRAMBLE
 #endif
 
 /*
@@ -371,11 +430,8 @@
 #endif
 
 /* Support 32-byte aligned flash sizes */
-#if DT_HAS_CHOSEN(zephyr_flash)
-    #if DT_PROP_OR(DT_CHOSEN(zephyr_flash), write_block_size, 0) > 8
-        #define MCUBOOT_BOOT_MAX_ALIGN \
-            DT_PROP(DT_CHOSEN(zephyr_flash), write_block_size)
-    #endif
+#if CONFIG_MCUBOOT_BOOT_MAX_ALIGN > 8
+#define MCUBOOT_BOOT_MAX_ALIGN CONFIG_MCUBOOT_BOOT_MAX_ALIGN
 #endif
 
 #ifdef CONFIG_MCUBOOT_BOOTUTIL_LIB_FOR_DIRECT_XIP
@@ -416,6 +472,9 @@
 #elif defined(CONFIG_NRFX_WDT31)
 #define MCUBOOT_WATCHDOG_FEED() \
     FEED_WDT_INST(31);
+#elif defined(CONFIG_NRFX_WDT010)
+#define MCUBOOT_WATCHDOG_FEED() \
+    FEED_WDT_INST(010);
 #else
 #error "No NRFX WDT instances enabled"
 #endif

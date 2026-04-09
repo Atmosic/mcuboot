@@ -33,7 +33,7 @@ the rest of the images too (for example, `slot2_partition` and
 The flash partitions are typically defined in the Zephyr boards folder, in a
 file named `boards/<arch>/<board>/<board>.dts`. An example `.dts` file with
 flash partitions defined is the frdm_k64f's in
-`boards/arm/frdm_k64f/frdm_k64f.dts`. Make sure the DT node labels in your board's
+`boards/nxp/frdm_k64f/frdm_k64f.dts`. Make sure the DT node labels in your board's
 `.dts` file match the ones used there.
 
 ## Installing requirements and dependencies
@@ -249,7 +249,6 @@ The mapping of image number to partition is as follows:
 
 Use the ``CONFIG_ENABLE_MGMT_PERUSER=y`` Kconfig option to enable the following additional commands:
 * Storage erase - This command allows erasing the storage partition (enable with ``CONFIG_BOOT_MGMT_CUSTOM_STORAGE_ERASE=y``).
-* Custom image list - This command allows fetching version and installation status (custom properties) for all images (enable with ``CONFIG_BOOT_MGMT_CUSTOM_IMG_LIST=y``).
 
 ### More configuration
 
