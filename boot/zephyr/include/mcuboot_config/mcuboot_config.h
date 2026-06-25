@@ -11,6 +11,7 @@
 #define __MCUBOOT_CONFIG_H__
 
 #include <zephyr/devicetree.h>
+#include <watchdog.h>
 
 #ifdef CONFIG_BOOT_SIGNATURE_TYPE_RSA
 #define MCUBOOT_SIGN_RSA
@@ -64,6 +65,10 @@
 
 #ifdef CONFIG_BOOT_HW_KEY
 #define MCUBOOT_HW_KEY
+#endif
+
+#ifdef CONFIG_BOOT_BUILTIN_KEY
+#define MCUBOOT_BUILTIN_KEY
 #endif
 
 #ifdef CONFIG_BOOT_VALIDATE_SLOT0
@@ -231,6 +236,10 @@
 
 #ifdef CONFIG_MCUBOOT_HW_DOWNGRADE_PREVENTION_COUNTER_LIMITED
 #define MCUBOOT_HW_ROLLBACK_PROT_COUNTER_LIMITED
+#endif
+
+#ifdef CONFIG_MCUBOOT_HW_DOWNGRADE_PREVENTION_LOCK
+#define MCUBOOT_HW_ROLLBACK_PROT_LOCK
 #endif
 
 #ifdef CONFIG_MCUBOOT_UUID_VID
@@ -436,86 +445,6 @@
 
 #ifdef CONFIG_MCUBOOT_BOOTUTIL_LIB_FOR_DIRECT_XIP
 #define MCUBOOT_BOOTUTIL_LIB_FOR_DIRECT_XIP 1
-#endif
-
-#if CONFIG_BOOT_WATCHDOG_FEED
-#if CONFIG_BOOT_WATCHDOG_FEED_NRFX_WDT
-#include <nrfx_wdt.h>
-
-#define FEED_WDT_INST(id)                                    \
-    do {                                                     \
-        nrfx_wdt_t wdt_inst_##id = NRFX_WDT_INSTANCE(id);    \
-        for (uint8_t i = 0; i < NRF_WDT_CHANNEL_NUMBER; i++) \
-        {                                                    \
-            nrf_wdt_reload_request_set(wdt_inst_##id.p_reg,  \
-                (nrf_wdt_rr_register_t)(NRF_WDT_RR0 + i));   \
-        }                                                    \
-    } while (0)
-#if defined(CONFIG_NRFX_WDT0) && defined(CONFIG_NRFX_WDT1)
-#define MCUBOOT_WATCHDOG_FEED() \
-    do {                        \
-        FEED_WDT_INST(0);       \
-        FEED_WDT_INST(1);       \
-    } while (0)
-#elif defined(CONFIG_NRFX_WDT0)
-#define MCUBOOT_WATCHDOG_FEED() \
-    FEED_WDT_INST(0);
-#elif defined(CONFIG_NRFX_WDT30) && defined(CONFIG_NRFX_WDT31)
-#define MCUBOOT_WATCHDOG_FEED() \
-    do {                        \
-        FEED_WDT_INST(30);      \
-        FEED_WDT_INST(31);      \
-    } while (0)
-#elif defined(CONFIG_NRFX_WDT30)
-#define MCUBOOT_WATCHDOG_FEED() \
-    FEED_WDT_INST(30);
-#elif defined(CONFIG_NRFX_WDT31)
-#define MCUBOOT_WATCHDOG_FEED() \
-    FEED_WDT_INST(31);
-#elif defined(CONFIG_NRFX_WDT010)
-#define MCUBOOT_WATCHDOG_FEED() \
-    FEED_WDT_INST(010);
-#else
-#error "No NRFX WDT instances enabled"
-#endif
-
-#elif DT_NODE_HAS_STATUS(DT_ALIAS(watchdog0), okay) /* CONFIG_BOOT_WATCHDOG_FEED_NRFX_WDT */
-#include <zephyr/device.h>
-#include <zephyr/drivers/watchdog.h>
-
-#define MCUBOOT_WATCHDOG_SETUP()                              \
-    do {                                                      \
-        const struct device* wdt =                            \
-            DEVICE_DT_GET(DT_ALIAS(watchdog0));               \
-        if (device_is_ready(wdt)) {                           \
-            wdt_setup(wdt, 0);                                \
-        }                                                     \
-    } while (0)
-
-#define MCUBOOT_WATCHDOG_FEED()                               \
-    do {                                                      \
-        const struct device* wdt =                            \
-            DEVICE_DT_GET(DT_ALIAS(watchdog0));               \
-        if (device_is_ready(wdt)) {                           \
-            wdt_feed(wdt, 0);                                 \
-        }                                                     \
-    } while (0)
-#else /* DT_NODE_HAS_STATUS(DT_ALIAS(watchdog0), okay) */
-/* No vendor implementation, no-op for historical reasons */
-#define MCUBOOT_WATCHDOG_FEED()         \
-    do {                                \
-    } while (0)
-#endif
-#else  /* CONFIG_BOOT_WATCHDOG_FEED */
-/* Not enabled, no feed activity */
-#define MCUBOOT_WATCHDOG_FEED()         \
-    do {                                \
-    } while (0)
-
-#endif /* CONFIG_BOOT_WATCHDOG_FEED */
-
-#ifndef MCUBOOT_WATCHDOG_SETUP
-#define MCUBOOT_WATCHDOG_SETUP()
 #endif
 
 #define MCUBOOT_CPU_IDLE() \

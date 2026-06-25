@@ -27,6 +27,7 @@
  */
 
 #include "bootutil_area.h"
+#include "bootutil_priv.h"
 #include "bootutil/image.h"
 #include "bootutil/bootutil_public.h"
 #ifdef MCUBOOT_ENC_IMAGES
@@ -35,16 +36,6 @@
 #include "bootutil/bootutil_log.h"
 
 BOOT_LOG_MODULE_DECLARE(mcuboot);
-
-#if !defined(MCUBOOT_OVERWRITE_ONLY) && \
-    !defined(MCUBOOT_SWAP_USING_MOVE) && \
-    !defined(MCUBOOT_SWAP_USING_OFFSET) && \
-    !defined(MCUBOOT_DIRECT_XIP) && \
-    !defined(MCUBOOT_RAM_LOAD) && \
-    !defined(MCUBOOT_SINGLE_APPLICATION_SLOT) && \
-    !defined(MCUBOOT_FIRMWARE_LOADER)
-#define MCUBOOT_SWAP_USING_SCRATCH 1
-#endif
 
 /**
  * Amount of space used to save information required when doing a swap,
@@ -141,7 +132,8 @@ boot_header_scramble_off_sz(const struct flash_area *fa, int slot, size_t *off, 
         if (ret < 0) {
             return ret;
         }
-        loff = flash_sector_get_off(&sector);
+        loff = flash_sector_get_size(&sector);
+        BOOT_LOG_DBG("boot_header_scramble_off_sz: adjusted loff %d", loff);
     }
 #endif
 
@@ -205,7 +197,8 @@ boot_erase_region(const struct flash_area *fa, uint32_t off, uint32_t size, bool
 {
     int rc = 0;
 
-    BOOT_LOG_DBG("boot_erase_region: flash_area %p, offset %d, size %d, backwards == %d",
+    BOOT_LOG_DBG("boot_erase_region: flash_area %p, offset %" PRIu32 ""
+                 ", size %" PRIu32 ", backwards == %" PRIu8,
                  fa, off, size, (int)backwards);
 
     if (off >= flash_area_get_size(fa) || (flash_area_get_size(fa) - off) < size) {
@@ -303,7 +296,8 @@ boot_scramble_region(const struct flash_area *fa, uint32_t off, uint32_t size, b
 {
     int rc = 0;
 
-    BOOT_LOG_DBG("boot_scramble_region: %p %d %d %d", fa, off, size, (int)backwards);
+    BOOT_LOG_DBG("boot_scramble_region: %p %" PRIu32 " %" PRIu32 " %d",
+                 fa, off, size, (int)backwards);
 
     if (size == 0) {
         goto done;
@@ -329,13 +323,15 @@ boot_scramble_region(const struct flash_area *fa, uint32_t off, uint32_t size, b
         } else {
             end_offset = ALIGN_DOWN((off + size), write_block);
         }
-        BOOT_LOG_DBG("boot_scramble_region: start offset %u, end offset %u", off, end_offset);
+        BOOT_LOG_DBG("boot_scramble_region: start offset %" PRIu32 ", "
+                     "end offset %" PRIu32, off, end_offset);
 
         while (off != end_offset) {
             /* Write over the area to scramble data that is there */
             rc = flash_area_write(fa, off, buf, write_block);
             if (rc != 0) {
-                BOOT_LOG_DBG("boot_scramble_region: error %d for %p %d %u",
+                BOOT_LOG_DBG("boot_scramble_region: error %d for %p "
+                             "%" PRIu32 " %u",
                              rc, fa, off, (unsigned int)write_block);
                 break;
             }

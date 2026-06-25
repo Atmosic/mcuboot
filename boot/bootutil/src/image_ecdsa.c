@@ -51,6 +51,14 @@ bootutil_verify_sig(uint8_t *hash, uint32_t hlen, uint8_t *sig, size_t slen,
 
     BOOT_LOG_DBG("bootutil_verify_sig: ECDSA builtin key %d", key_id);
 
+#if defined(MCUBOOT_USE_PSA_CRYPTO)
+    psa_status_t psa_status = psa_crypto_init();
+    if (psa_status != PSA_SUCCESS) {
+        BOOT_LOG_ERR("psa_crypto_init failed: %d", (int)psa_status);
+        FIH_RET(fih_rc);
+    }
+#endif
+
     pubkey = (uint8_t *)bootutil_keys[key_id].key;
     end = pubkey + *bootutil_keys[key_id].len;
     bootutil_ecdsa_init(&ctx);
@@ -81,6 +89,14 @@ bootutil_verify_sig(uint8_t *hash, uint32_t hlen, uint8_t *sig, size_t slen,
     FIH_DECLARE(fih_rc, FIH_FAILURE);
 
     BOOT_LOG_DBG("bootutil_verify_sig: ECDSA embedded key %hhd", key_id);
+
+#if defined(MCUBOOT_USE_PSA_CRYPTO)
+    psa_status_t psa_status = psa_crypto_init();
+    if (psa_status != PSA_SUCCESS) {
+        BOOT_LOG_ERR("psa_crypto_init failed: %d", (int)psa_status);
+        FIH_RET(fih_rc);
+    }
+#endif
 
     /* Use builtin key for image verification, no key parsing is required. */
     ctx.key_id = key_id;
