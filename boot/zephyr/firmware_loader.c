@@ -40,6 +40,8 @@ boot_image_validate(const struct flash_area *fa_p,
     static uint8_t tmpbuf[BOOT_TMPBUF_SZ];
     FIH_DECLARE(fih_rc, FIH_FAILURE);
 
+    BOOT_LOG_DBG("boot_image_validate: encrypted == %d", (int)IS_ENCRYPTED(hdr));
+
     /* NOTE: The first argument to boot_image_validate, for enc_state pointer,
      * is allowed to be NULL only because the single image loader compiles
      * with BOOT_IMAGE_NUMBER == 1, which excludes the code that uses
@@ -70,6 +72,8 @@ boot_image_validate_once(const struct flash_area *fa_p,
     static struct boot_swap_state state;
     int rc;
     FIH_DECLARE(fih_rc, FIH_FAILURE);
+
+    BOOT_LOG_DBG("boot_image_validate_once: flash area %p", fa_p);
 
     memset(&state, 0, sizeof(struct boot_swap_state));
     rc = boot_read_swap_state(fa_p, &state);
@@ -108,8 +112,13 @@ static fih_ret validate_image_slot(int slot, struct boot_rsp *rsp)
     int rc = -1;
     FIH_DECLARE(fih_rc, FIH_FAILURE);
 
+    BOOT_LOG_DBG("validate_image_slot: slot %d", slot);
+
     rc = flash_area_open(slot, &_fa_p);
-    assert(rc == 0);
+    if (rc != 0) {
+        BOOT_LOG_DBG("Error opening flash area. rc = %d", rc);
+        FIH_RET(FIH_FAILURE);
+    }
 
     rc = boot_image_load_header(_fa_p, &_hdr);
     if (rc != 0) {
@@ -155,6 +164,8 @@ boot_go(struct boot_rsp *rsp)
 {
     bool boot_firmware_loader = false;
     FIH_DECLARE(fih_rc, FIH_FAILURE);
+
+    BOOT_LOG_DBG("boot_go: firmware loader");
 
 #ifdef CONFIG_BOOT_FIRMWARE_LOADER_ENTRANCE_GPIO
     if (io_detect_pin() &&

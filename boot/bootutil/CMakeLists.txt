@@ -17,7 +17,12 @@ target_include_directories(bootutil
 target_sources(bootutil
     PRIVATE
         src/boot_record.c
+        src/bootutil_find_key.c
+        src/bootutil_img_hash.c
+        src/bootutil_img_security_cnt.c
         src/bootutil_misc.c
+        src/bootutil_area.c
+        src/bootutil_loader.c
         src/bootutil_public.c
         src/caps.c
         src/encrypted.c
@@ -30,12 +35,8 @@ target_sources(bootutil
         src/loader.c
         src/swap_misc.c
         src/swap_move.c
+        src/swap_offset.c
         src/swap_scratch.c
+        src/ram_load.c
         src/tlv.c
 )
-if(CONFIG_BOOT_RAM_LOAD)
-    target_sources(bootutil
-        PRIVATE
-            src/ram_load.c
-    )
-endif()

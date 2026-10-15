@@ -7,6 +7,13 @@ dependent, therefore, the system environment including toolchains, must be set a
 standalone build version means that ESP-IDF and its toolchain are used as source. For 3rd parties
 framework, HAL path and toolchain must be set.
 
+---
+***Note***
+
+*Current compatible ESP-IDF version for HAL sources is `v5.1.6`*
+
+---
+
 Documentation about the MCUboot bootloader design, operation and features can be found in the
 [design document](design.md).
 
@@ -16,7 +23,7 @@ The current port is available for use in the following SoCs within the OSes:
 
 |        | ESP32     | ESP32-S2  | ESP32-C3  | ESP32-S3  | ESP32-C2    | ESP32-C6  | ESP32-H2    |
 | :----: | :-------: | :-------: | :-------: | :-------: | :---------: | :-------: | :---------: |
-| Zephyr | Supported | Supported | Supported | Supported | Supported   | Supported | In progress |
+| Zephyr | Supported | Supported | Supported | Supported | Supported   | Supported | Supported   |
 | NuttX  | Supported | Supported | Supported | Supported | In progress | Supported | Supported   |
 
 Notice that any customization in the memory layout from the OS application must be done aware of
@@ -44,7 +51,12 @@ The following instructions considers a MCUboot Espressif port standalone build.
     ```
 
 3. If ESP-IDF is the chosen option for use as HAL layer and the system already have ESP-IDF
-   installed, ensure that the environment is set:
+   installed, ensure that it is the current compatible version and the environment is set:
+
+    ```bash
+    cd <IDF_PATH>
+    git checkout v5.1.6
+    ```
 
     ```bash
     <IDF_PATH>/install.sh
@@ -120,22 +132,47 @@ Additional configuration related to MCUboot features and slot partitioning may b
 
 2. Flash MCUboot in your device:
 
+    ---
+    ***Note***
+
+    *Prior to flashing the bootloader and/or application and booting for the first time, ensure
+    that the secondary slot and scratch area are erased. This is important because flash erased
+    value (`0xFF` in case of this port) read from the trailer registers are part of MCUboot's
+    update-state checking mechanism, thus unknown data or garbage could be potentially
+    interpreted as a valid state and lead to an unexpected behavior. Flash can be erased
+    entirely using:*
+
+    ```bash
+    esptool.py -p <PORT> erase_flash
+    ```
+
+    ---
+
     ```bash
     ninja -C build/ flash
     ```
 
-    If `MCUBOOT_FLASH_PORT` arg was not passed to `cmake`, the default `PORT` for flashing will be
-    `/dev/ttyUSB0`.
+    If the below arguments were not passed to `cmake` build step, the default values for each on
+    the flashing operation will be as following:
 
-    Alternatively:
+    - `MCUBOOT_FLASH_PORT`: "/dev/ttyUSB0"
+    - `ESP_BAUD_RATE`: 115200
+    - `ESP_FLASH_MODE`: "dio"
+    - `ESP_FLASH_FREQ`: "40m" for ESP32, ESP32-S2, ESP32-S3, ESP32-C3, ESP32-C6;
+                        "60m" for ESP32-C2;
+                        "24m" for ESP32-H2.
+
+    Alternatively, `esptool` can be used for flashing directly:
 
     ```bash
-    esptool.py -p <PORT> -b <BAUD> --before default_reset --after no_reset --chip <TARGET> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq 40m <BOOTLOADER_FLASH_OFFSET> build/mcuboot_<TARGET>.bin
+    esptool.py -p <PORT> -b <BAUD> --before default_reset --after no_reset --chip <TARGET> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq <FLASH_FREQ> <BOOTLOADER_FLASH_OFFSET> build/mcuboot_<TARGET>.bin
     ```
 
     ---
     ***Note***
 
+    Ensure that the flash parameters like `<FLASH_FREQ>`, `<FLASH_MODE>`, `<FLASH_SIZE>` matches
+    the same parameters from `cmake` step and configuration file.
     You may adjust the port `<PORT>` (like `/dev/ttyUSB0`) and baud rate `<BAUD>` (like `2000000`)
     according to the connection with your board. You can also skip `<PORT>` and `<BAUD>` parameters
     so that esptool tries to automatically detect it.
@@ -193,7 +230,7 @@ Additional configuration related to MCUboot features and slot partitioning may b
 2. Flash the signed application:
 
     ```bash
-    esptool.py -p <PORT> -b <BAUD> --before default_reset --after hard_reset --chip <TARGET>  write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq 40m <SLOT_OFFSET> <SIGNED_BIN>
+    esptool.py -p <PORT> -b <BAUD> --before default_reset --after hard_reset --chip <TARGET>  write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq <FLASH_FREQ> <SLOT_OFFSET> <SIGNED_BIN>
     ```
 
 # [Downgrade prevention](#downgrade-prevention)
@@ -345,10 +382,19 @@ enabled and also to avoid any unrecoverable/permanent state change:*
 CONFIG_SECURE_BOOT_ALLOW_JTAG=1
 CONFIG_SECURE_FLASH_UART_BOOTLOADER_ALLOW_CACHE=1
 
-# Options for enabling eFuse emulation in Flash
+# Options for enabling eFuse emulation in Flash (adjust
+# CONFIG_EFUSE_VIRTUAL_OFFSET accordingly in order
+# to not overlap with other flash regions)
 CONFIG_EFUSE_VIRTUAL=1
 CONFIG_EFUSE_VIRTUAL_KEEP_IN_FLASH=1
+CONFIG_EFUSE_VIRTUAL_OFFSET=0x10000
+CONFIG_EFUSE_VIRTUAL_SIZE=0x2000
+
 ```
+
+Observe that the region defined by `CONFIG_EFUSE_VIRTUAL_OFFSET` and `CONFIG_EFUSE_VIRTUAL_SIZE`
+must not overlap with other flash regions.
+
 ---
 
 ---
@@ -399,10 +445,13 @@ key are correct and you did not forget anything before flashing.*
 ---
 
 Flash the bootloader as following, with `--after no_reset` flag, so you can reset the device only
-when assured:
+when assured. Also ensure that the flash parameters like `<FLASH_FREQ>`, `<FLASH_MODE>`,
+`<FLASH_SIZE>` matches the same parameters from `cmake` step and configuration file, this is
+important because `esptool` may modify the binary if it detects that these parameters are
+different from what they were on the building.
 
 ```bash
-esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq 40m <BOOTLOADER_FLASH_OFFSET> <SIGNED_BOOTLOADER_BIN>
+esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq <FLASH_FREQ> <BOOTLOADER_FLASH_OFFSET> <SIGNED_BOOTLOADER_BIN>
 ```
 
 ### [Secure Boot Process](#secure-boot-process)
@@ -484,10 +533,19 @@ CONFIG_SECURE_FLASH_UART_BOOTLOADER_ALLOW_DEC=1
 CONFIG_SECURE_FLASH_UART_BOOTLOADER_ALLOW_CACHE=1
 CONFIG_SECURE_BOOT_ALLOW_JTAG=1
 
-# Options for enabling eFuse emulation in Flash
+# Options for enabling eFuse emulation in Flash (adjust
+# CONFIG_EFUSE_VIRTUAL_OFFSET accordingly in order
+# to not overlap with other flash regions)
 CONFIG_EFUSE_VIRTUAL=1
 CONFIG_EFUSE_VIRTUAL_KEEP_IN_FLASH=1
+CONFIG_EFUSE_VIRTUAL_OFFSET=0x10000
+CONFIG_EFUSE_VIRTUAL_SIZE=0x2000
+
 ```
+
+Observe that the region defined by `CONFIG_EFUSE_VIRTUAL_OFFSET` and `CONFIG_EFUSE_VIRTUAL_SIZE`
+must not overlap with other flash regions.
+
 ---
 
 ---
@@ -522,10 +580,26 @@ CONFIG_SECURE_ENABLE_SECURE_ROM_DL_MODE=1
 
 ---
 
+---
+***Note***
+
+As recommended, ensure that the secondary slot and scratch area are **erased** prior to
+the first time boot. Hardware flash encryption is transparent to MCUboot and the first boot
+encryption process will encrypt the whole slots and scratch including their trailer regions,
+and as said before, erased value read from trailer registers is also an expected state of
+MCUboot update checking process. Erase flash command:
+
+```bash
+esptool.py -p <PORT> erase_flash
+```
+
+---
+
 ### [Signing the image when working with Flash Encryption](#signing-the-image-when-working-with-flash-encryption)
 
-When enabling flash encryption, it is required to signed the image using 32-byte alignment:
-`--align 32 --max-align 32`.
+When enabling flash encryption, it is required to sign the image using 32-byte alignment and also
+add the padding to fill the image up to the slot size:
+`--pad --align 32 --max-align 32`.
 
 Command example:
 
@@ -536,14 +610,16 @@ imgtool.py sign -k <YOUR_SIGNING_KEY.pem> --pad --pad-sig --align 32 --max-align
 ### [Device generated key](#device-generated-key)
 
 First ensure that the application image is able to perform encrypted read and write operations to
-the SPI Flash. Flash the bootloader and application normally:
+the SPI Flash.
+
+Flash the bootloader and application normally:
 
 ```bash
-esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq 40m <BOOTLOADER_FLASH_OFFSET> <BOOTLOADER_BIN>
+esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq <FLASH_FREQ> <BOOTLOADER_FLASH_OFFSET> <BOOTLOADER_BIN>
 ```
 
 ```bash
-esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq 40m <PRIMARY_SLOT_FLASH_OFFSET> <APPLICATION_BIN>
+esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq <FLASH_FREQ> <PRIMARY_SLOT_FLASH_OFFSET> <APPLICATION_BIN>
 ```
 
 On the **first boot**, the bootloader will:
@@ -598,11 +674,11 @@ of generate a new one.
 Flashing the bootloader and application:
 
 ```bash
-esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq 40m <BOOTLOADER_FLASH_OFFSET> <BOOTLOADER_BIN>
+esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq <FLASH_FREQ> <BOOTLOADER_FLASH_OFFSET> <BOOTLOADER_BIN>
 ```
 
 ```bash
-esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq 40m <PRIMARY_SLOT_FLASH_OFFSET> <APPLICATION_BIN>
+esptool.py -p <PORT> -b 2000000 --after no_reset --chip <ESP_CHIP> write_flash --flash_mode dio --flash_size <FLASH_SIZE> --flash_freq <FLASH_FREQ> <PRIMARY_SLOT_FLASH_OFFSET> <APPLICATION_BIN>
 ```
 
 On the **first boot**, the bootloader will:

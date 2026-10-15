@@ -137,6 +137,11 @@
 #define MCUBOOT_BOOT_MAX_ALIGN  MYNEWT_VAL(MCU_FLASH_MIN_WRITE_SIZE)
 #endif
 
+#define MCUBOOT_DEV_WITH_ERASE
+
+/* Enable non-protected TLV check against allow list */
+#define MCUBOOT_USE_TLV_ALLOW_LIST 1
+
 #if MYNEWT_VAL(BOOTUTIL_FEED_WATCHDOG) && MYNEWT_VAL(WATCHDOG_INTERVAL)
 #include <hal/hal_watchdog.h>
 #define MCUBOOT_WATCHDOG_FEED()    \

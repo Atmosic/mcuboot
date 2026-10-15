@@ -62,15 +62,10 @@
 #endif
 
 #include <mbedtls/version.h>
-#if MBEDTLS_VERSION_NUMBER >= 0x03000000
-#include <mbedtls/compat-2.x.h>
-#endif
 
 #endif /* MCUBOOT_USE_MBED_TLS */
 
-#ifdef MCUBOOT_USE_ATM_SHA2
-#include "atm_sha2.h"
-#elif defined(MCUBOOT_USE_TINYCRYPT)
+#if defined(MCUBOOT_USE_TINYCRYPT)
 #if defined(MCUBOOT_SHA512)
     #include <tinycrypt/sha512.h>
 #else
@@ -146,10 +141,10 @@ static inline int bootutil_sha_init(bootutil_sha_context *ctx)
 
 #ifdef MCUBOOT_SHA512
     mbedtls_sha512_init(ctx);
-    ret = mbedtls_sha512_starts_ret(ctx, 0);
+    ret = mbedtls_sha512_starts(ctx, 0);
 #else
     mbedtls_sha256_init(ctx);
-    ret = mbedtls_sha256_starts_ret(ctx, 0);
+    ret = mbedtls_sha256_starts(ctx, 0);
 #endif
 
     return ret;
@@ -173,9 +168,9 @@ static inline int bootutil_sha_update(bootutil_sha_context *ctx,
     int ret;
 
 #ifdef MCUBOOT_SHA512
-    ret = mbedtls_sha512_update_ret(ctx, data, data_len);
+    ret = mbedtls_sha512_update(ctx, data, data_len);
 #else
-    ret = mbedtls_sha256_update_ret(ctx, data, data_len);
+    ret = mbedtls_sha256_update(ctx, data, data_len);
 #endif
 
     return ret;
@@ -187,9 +182,9 @@ static inline int bootutil_sha_finish(bootutil_sha_context *ctx,
     int ret;
 
 #ifdef MCUBOOT_SHA512
-    ret = mbedtls_sha512_finish_ret(ctx, output);
+    ret = mbedtls_sha512_finish(ctx, output);
 #else
-    ret = mbedtls_sha256_finish_ret(ctx, output);
+    ret = mbedtls_sha256_finish(ctx, output);
 #endif
 
     return ret;
@@ -197,43 +192,7 @@ static inline int bootutil_sha_finish(bootutil_sha_context *ctx,
 
 #endif /* MCUBOOT_USE_MBED_TLS */
 
-#ifdef MCUBOOT_USE_ATM_SHA2
-
-// Unused
-typedef uint8_t bootutil_sha_context;
-
-static inline void bootutil_sha_init(bootutil_sha_context *ctx)
-{
-    (void)ctx;
-    atm_sha256_params_t const sha256_params = {
-        .mode = ATM_SHA256_SHA_MODE,
-        .byte_endianess = ATM_SHA256_ENDIANESS_BIG,
-        .digest_endianess = ATM_SHA256_ENDIANESS_BIG
-    };
-    atm_sha256_init(&sha256_params);
-}
-
-static inline void bootutil_sha_drop(bootutil_sha_context *ctx)
-{
-    (void)ctx;
-    atm_sha256_disable();
-}
-
-static inline int bootutil_sha_update(bootutil_sha_context *ctx,
-                                         const void *data,
-                                         uint32_t data_len)
-{
-    (void)ctx;
-    return atm_sha256_update_pio(data, data_len);
-}
-
-static inline int bootutil_sha_finish(bootutil_sha_context *ctx,
-                                          uint8_t *output)
-{
-    atm_sha256_final(output);
-    return 0;
-}
-#elif defined(MCUBOOT_USE_TINYCRYPT)
+#if defined(MCUBOOT_USE_TINYCRYPT)
 #if defined(MCUBOOT_SHA512)
 typedef struct tc_sha512_state_struct bootutil_sha_context;
 #else

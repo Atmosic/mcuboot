@@ -3,6 +3,320 @@
 - Table of Contents
 {:toc}
 
+## Version 2.4.0
+
+- Added support for using an inbuilt (compiled-in) key in Zephyr
+  builds.
+- Added support for using an external PSA crypto library backend
+  (a non-mbedTLS PSA backend) in Zephyr builds.
+- Added a Kconfig choice in Zephyr builds to select between Mbed
+  TLS legacy crypto and the PSA API for RSA operations. Legacy
+  crypto remains the default since the PSA API increases the
+  flash footprint and is not acceptable for all targets.
+- Added ECDSA support to the Zephyr port using mbedTLS.
+- ``BOOT_SIGNATURE_TYPE_RSA`` no longer selects RSA key exchange
+  support, since MCUboot only requires RSA for signature
+  verification.
+- Use the new ``MBEDTLS_VERSION_4_x`` Kconfig boolean in Zephyr
+  builds to select between Mbed TLS 3.x legacy crypto and the
+  TF-PSA-Crypto 1.x backend.
+- Automatically enable ``TEST_RANDOM_GENERATOR`` in Zephyr builds
+  when PSA crypto is enabled and no entropy driver is available,
+  since ``MBEDTLS_PSA_CRYPTO_LEGACY_RNG`` no longer selects it
+  implicitly.
+- Renamed ``CONFIG_MBEDTLS_CFG_FILE`` usage to follow the rename
+  in Zephyr.
+- Renamed nRF54H Kconfig symbol usage to follow the rename in
+  Zephyr.
+- imgtool: added a new ``--custom-tlv-file`` option that works
+  like ``--custom-tlv`` but reads the TLV value from a binary
+  file instead of taking it on the command line.
+- imgtool: ``dumpinfo`` now supports a ``-f``/``--format`` option
+  to select between human, yaml and json output. The defaults
+  remain backwards compatible (human for stdout, yaml when
+  writing to a file).
+- imgtool: ``dumpinfo`` can now read Intel hex (``.hex``) files
+  in addition to binary files.
+- Zephyr's sysbuild hooks have been reworked to support
+  arbitrary-named MCUboot images, also allowing for multiple
+  MCUboot builds in a single sysbuild project to update
+  different images with estimated image overhead sizes.
+- Zephyr builds now use partition macros without the ``FIXED_``
+  prefix, allowing MCUboot to be used on devices that use
+  ``fixed-partitions`` and ``zephyr,memory-mapped`` compatibles.
+- Use the ``DT_REG_ADDR()`` and ``DT_REG_SIZE()`` devicetree
+  macros to obtain the target load area address range, allowing
+  nodes that rely on a devicetree ``ranges`` property to be
+  used.
+- Removed the forced ``CONFIG_BOOT_MAX_IMG_SECTORS`` for
+  Espressif targets so that auto detection can take place.
+- Added support for placing image slots in sub-partition
+  devicetree nodes when computing MCUboot image overhead.
+- Improved the Zephyr CMake support for finding NVM devices,
+  including reading the write and erase block sizes from the
+  device.
+- Added support for an ``ext_flash_app`` variant on the
+  ``stm32h7s3xx``, allowing chainloading applications from
+  external flash while MCUboot runs from internal flash.
+- Updated the nrf52840 board overlay bindings to use the new
+  ``zephyr,memory-mapped`` binding, and added missing ``ranges``
+  properties on a few board overlays.
+- Espressif: separated the ``do_boot`` path so that RISC-V based
+  Espressif SoCs no longer fall through to the wrong ``do_boot``
+  implementation.
+- Espressif: updated the default ``bootloader.conf`` files to
+  reflect the default flash layout configuration for most
+  Espressif boards on Zephyr.
+- Espressif: added a default SoC configuration for ESP32-H2 so
+  that DRAM usage does not overflow.
+- Mbed: added ``flash_area_get_sector`` to fix an undefined
+  reference for Mbed CE.
+- Mbed: fixed the ``MCUBOOT_SWAP_SAVE_ENCTLV`` configuration
+  option by switching to the canonical name and correcting the
+  macro name.
+- Mynewt: improved the BOOTUTIL configuration so that only
+  ``bootutil_public.c`` is built for non-bootloader builds,
+  allowing applications to skip bootloader-only syscfgs.
+- Fixed image size validation to include the
+  ``ih_protect_tlv_size`` field.
+- Fix: Corrected the copy size calculation when bootstrapping
+  and swapping using ``MCUBOOT_SWAP_USING_MOVE``. Previously,
+  the primary region size was used, which could be larger than
+  the secondary region, when using the optimal region sizes.
+  Now, the size of the secondary region (excluding the swap
+  sector and sectors needed for swapping) is used, ensuring
+  only the valid image area is copied. This prevents potential
+  over-copying and related issues during image upgrade or
+  bootstrap operations.
+- Fixed ``image_validate`` so that the offset of the
+  swap-using-move sector is included when pure mode is used in
+  swap-offset.
+- Fixed ``image_ed25519`` to no longer call mbedTLS public key
+  functions when ``MCUBOOT_BUILTIN_KEY`` is enabled.
+- Fixed the definition of ``bootutil_find_key`` when
+  ``MCUBOOT_BYPASS_KEY_MATCH`` is set and ``MCUBOOT_HW_KEY`` is
+  not.
+- Fixed typos and incorrect types/pointer indirection in
+  ``boot_serial_encryption``.
+- Added the missing swap-offset source file to the bootutil
+  CMake list, and fixed the RAM load source file which was
+  using Zephyr-specific Kconfigs to decide whether it should be
+  included.
+- RISCV targets in swap mode will no longer erroneously attempt
+  to load the image to RAM and will boot the image directly, as
+  this is fully supported by RISCV and looks to have been an
+  error in a previous code submission.
+- Fixed devicetree ``compatible`` property handling in CMake so
+  that matching ``soc-nv-flash`` works for nodes whose
+  ``compatible`` property contains multiple strings.
+- Fixed the regression where the mbedTLS include path was not
+  added to the MCUboot build, breaking RSA support with
+  encryption.
+- Fixed an extra ``.`` in a log message.
+- Call ``LOG_PANIC()`` before jumping to the application so log
+  backends have an opportunity to flush in-flight messages
+  before the jump.
+- Capture log events that were previously lost very early or
+  very late in the boot process: the deferred logging thread
+  now starts with ``K_NO_WAIT`` and is woken in
+  ``zephyr_boot_log_stop()`` so it drains pending messages
+  before MCUboot jumps to the application.
+- Reworked the Zephyr CMake support to fix many issues,
+  including a missing project name, casing fixes, deduplicated
+  statements, and stopped abusing ``zephyr_library_*``
+  functions where MCUboot is not actually a library.
+- Added error codes to several bootutil loader log messages and
+  reformatted others to fit on fewer lines for easier
+  readability and grepping.
+- Removed the outdated ``hello-world`` Zephyr sample, since
+  Zephyr's tree contains a sysbuild MCUboot sample that should
+  be used instead.
+- Fixed the ``ext/nrf/cc310_glue`` include path to drop the
+  deprecated non-``zephyr/`` prefix.
+- Fixed Kconfig options that were leaking outside of the
+  MCUboot menu.
+- Fixed a missing ``tsa-crypto`` dependency twister error.
+- Updated the design documentation to correct an outdated
+  comment that suggested the TLV type field is 8-bit when it is
+  actually 16-bit.
+
+## Version 2.3.0
+
+- Added support for booting Cortex-R5 images
+- Add support for cleaning up the Cortex-R core before final jumping
+- Aligned the project security policy with the [TrustedFirmware.org security
+  policy](https://www.trustedfirmware.org/.well-known/security.txt).
+- Fixed imgtool dependency on click package version.
+- Enabled support for ram-load revert mode, which functions using the same
+  logic as direct-xip revert mode but loads the executable image to ram.
+- Add cache flush after write/erase operations to avoid getting invalid
+  data when these are followed by read operation.
+- Fix image wrong state after swap-scratch when hardware flash encryption
+  is enabled. When hardware flash encryption is enabled, force expected
+  erased value (0xFF) into flash when erasing a region, and also always
+  do a real erase before writing data into flash.
+- Move the Virtual eFuse offset in flash configuration from hardcoded value to .conf file.
+- Fixed issue in boot_scramble_regions, where incorrect boundary
+  check would cause function to attempt to write pass a designated
+  flash area.
+- Fixed issue in image_validate when `MCUBOOT_HASH_STORAGE_DIRECTLY` is enabled
+  for platforms with NVM memory that does not start at 0x00.
+- Fixed issue in image_validate when `BOOT_SIGNATURE_TYPE_PURE` is enabled
+  for platforms with NVM memory that does not start at 0x00.
+- Fixed serial recovery with progressive erase for MCUboot modes of single
+  updatable slot (`MCUBOOT_SINGLE_APPLICATION_SLOT`, `MCUBOOT_FIRMWARE_LOADER`,
+  `MCUBOOT_SINGLE_APPLICATION_SLOT_RAM_LOAD`) which was previously failing due
+  to attempting to access non-existent image status fields.
+- Fixed issue with imgtool when trying to compress images with
+  no header padding requested.
+- Fixed issue with swap using offset when mininmal erase was
+  enabled that did not offset the erase to the second sector and
+  wrongly used the (empty) first sector of the secondary slot.
+- Switched to picolibc as the default C library in Zephyr.
+- Fixed wrong define specifying 2 slots in single loader mode
+  instead of just 1
+- Fixed wrong slot ID in hook calls from serial recovery.
+- Fixed issues with serial recovery not building/not
+  working/faulting.
+- Swap using offset now includes the size of the unprotected TLV
+  area which was wrongly missing before, this requires extra space
+  in the swap status as the data is not part of the image header
+- Control over compilation of unprotected TLV allow list has been exposed
+  using MCUBOOT_USE_TLV_ALLOW_LIST mcuboot configuration identifier.
+- Fixed issue with platforms that have
+  MCUBOOT_SUPPORT_DEV_WITHOUT_ERASE set that did not scramble
+  (delete) data sections from the trailer that should have been
+  deleted.
+- Fixed issue with boot_scramble_region escaping flash area due
+  to error in the range check.
+- A few changes to make vscode nicer, including a default package to build at
+  the top level, and ignoring some of the cache files from vscode.
+- Zephyr builds are now using Kconfig CONFIG_MCUBOOT_BOOT_MAX_ALIGN
+  to set the MCUBOOT_BOOT_MAX_ALIGN.
+- Fixed issue with checking pin reset not checking for single
+  flag in Zephyr.
+- imgtool verify when using a public ed25519 key has been fixed
+  to work rather than show an invalid key type not matching the
+  TLV record error.
+- Zephyr signature and encryption key file path handling has now
+  been aligned with Zephyr, this means values can be specified in
+  multiple .conf file and the one that last set it will be the set
+  value. This also means that key files will no longer be found
+  relative to the .conf file and will instead be found relative
+  to the build system ``APPLICATION_CONFIG_DIR`` variable, though
+  the key file strings are now configured which allows for using
+  escaped CMake variables to locate the files, for example with
+  ``\${CMAKE_CURRENT_LIST_DIR}`` to specify a file relative to
+  the folder that the file is in.
+- Watchdog support in Zephyr has been reworked and fixed to allow
+  installing a timeout (with a configurable value) before starting
+  it. The default timeout is set to 1 minute and this feature has
+  been enabled by default. 3 Kconfig options have been added which
+  control how the watchdog is used in MCUboot:
+
+    * ``CONFIG_BOOT_WATCHDOG_SETUP_AT_BOOT`` controls setting up
+      the watchdog in MCUboot (if not set up, it can still be set,
+      if the driver supports this non-compliant behaviour).
+    * ``CONFIG_BOOT_WATCHDOG_INSTALL_TIMEOUT_AT_BOOT`` controls if
+      a timeout is installed at bootup or not.
+    * ``CONFIG_BOOT_WATCHDOG_TIMEOUT_MS`` sets the value of the
+      timeout in ms.
+
+- In addition, Zephyr modules can now over-ride the default
+  watchdog functionality by replacing the weakly defined functions
+  ``mcuboot_watchdog_setup`` and/or ``mcuboot_watchdog_feed``,
+  these functions take no arguments.
+- correct esp32c6 overlay
+
+## Version 2.2.0
+
+- Added support for retrieving HW embedded private keys for image encryption
+  (The private key can be retrieved from trusted sources like OTP, TPM.).
+- Changed bootutil's order of events to verify the image header
+  before checking the image.
+- Added the bootloader state object to the bootutil
+  boot_is_header_valid() function
+- Added optional write block size checking to ensure expected
+  sizes match what is available on the hardware.
+- Added optional erase size checking to ensure expected sizes
+  match what is available on the hardware.
+- Added debug logs for zephyr to output discrepencies in erase
+  and write block sizes in dts vs actual hardware configuration
+  at run-time.
+- When using swap with scratch, the image is now decrypted when copying from
+  the scratch partition to the primary slot. Therefore, the scratch partition
+  doesn't contain plaintext firmware data anymore.
+- Added verification for supported IDF-based HAL version.
+- Fixed missing macro for XMC flash devices on ESP32-S3
+- Extended image loader header to include RTC/LP RAM, DROM and IROM segments.
+- Fixed errors when building for `thingy52`, `thingy53` and
+  `nrf9160dk` boards.
+- Fixed chain load address output log message for RAM load
+  mode in Zephyr
+- Fixed issue for swap using move whereby a device could get
+  stuck in a revert loop despite there being no image in the
+  secondary slot
+- Fixed clash when using sysbuild with other
+  applications (i.e. tests) using the name mcuboot
+- imgtool: added initial sanity tests for imgtool commands,
+- imgtool: added and enabled unittests in GitGub workflow,
+- Fixed wrong maximum application size calculation when
+  operating in swap using move mode
+- Added additional images max size support to shared data
+  function
+- Fixed issue with serial recovery image list wrongly using
+  number of images as the number of slots and not returning
+  complete information for 1 updateable image
+- Added slot info command support to serial recovery mode
+- Fixed issue with serial recovery variables not being
+  correctly initialised to default values which could cause
+  some commands to do unexpected operations
+- Added a new swap using offset algorithm which is set with
+  `MCUBOOT_SWAP_USING_OFFSET`. This algorithm is similar to swap
+  using move but avoids moving the sectors in the primary slot
+  up by having the update image written in the second sector in
+  the update slot, which offers a faster update process and
+  requires a smaller swap status area
+- Added support for automatically calculating the maximum number
+  of sectors that are needed for a build by checking the erase
+  sizes of the partitions using CMake for Zephyr. This behaviour
+  can be reverted to the old manual behaviour by disabling
+  `CONFIG_BOOT_MAX_IMG_SECTORS_AUTO`
+- Added protected TLV size to image size check in bootutil
+- Added Kconfig for decompression support in Zephyr
+- Added compressed image flags and TLV to bootutil
+- Added support for removing images with conflicting flags in
+  bootutil
+- Added support for removing encrypted/compressed images when
+  MCUboot is compiled without support for them
+- Added support for devices that do not require erase prior to write operation.
+- Add corrections to the max app size calculations.
+- Fixed issue with swap using scratch mode that would cause the
+  primary image to be corrupt and unbootable after an update if the
+  device was rebooted whilst the scratch area was being erased.
+- Fixed issue with serial recovery if canonical CBOR mode was
+  enabled.
+- Fixed issue with serial recovery set image state not checking
+  primary slot images.
+- Fixed issue with watchdog not being fed during flash erase
+  operations, which could cause the watchdog to time out on long
+  erase operations and prevent firmware updates from being possible.
+- Fix issues related to calculating the maximum image size for a given
+  configuration.
+- Fix an issue with sha hash calculations in a loop.
+- Fix an issue with the security counter being updated before an image is
+  confirmed.
+- Added a contributing guideline.
+- Fixed an issue related to referencing the arm-vector table of the
+  application, which caused a jump to the incorrect address instead of the
+  application reset vector for some Zephyr builds when LTO (link time
+  optimization) was enabled.
+- Fixed issue with trailer and swap status sizes wrongly being
+  included in single slot/firmware loaded modes which wrongly
+  reduced the maximum allowable firmware sizes.
+- Fixes for Zephyr 4.1 and MPU/SYSMPU renaming
+- Fix support for MCX-N9XX with Zephyr.
+
 ## Version 2.1.0
 
 - Boot serial: Add response to echo command if support is not
@@ -68,7 +382,7 @@ function `boot_save_shared_data`.
     commit 3016d00cd765e7c09a14af55fb4dcad945e4b982
     Author: Jamie McCrae <jamie.mccrae@nordicsemi.no>
     Date:   Tue Mar 14 12:35:51 2023 +0000
-    
+
         bootutil: Add active slot number and max app size to shared data
 
 ### About this release

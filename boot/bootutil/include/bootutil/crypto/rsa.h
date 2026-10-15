@@ -68,6 +68,7 @@ extern "C" {
 typedef struct {
     psa_key_id_t key_id;
 } bootutil_rsa_context;
+typedef bootutil_rsa_context bootutil_key_exchange_ctx;
 
 static inline void bootutil_rsa_init(bootutil_rsa_context *ctx)
 {
@@ -100,12 +101,12 @@ static int bootutil_rsa_oaep_decrypt(
         return -1;
     }
     size_t input_size = PSA_BITS_TO_BYTES(psa_get_key_bits(&key_attr));
-    if (input_size != TLV_ENC_RSA_SZ) {
+    if (input_size != BOOT_ENC_TLV_SIZE) {
         return -1;
     }
 
     status = psa_asymmetric_decrypt(ctx->key_id, PSA_ALG_RSA_OAEP(PSA_ALG_SHA_256),
-                                    input, TLV_ENC_RSA_SZ, NULL, 0,
+                                    input, BOOT_ENC_TLV_SIZE, NULL, 0,
                                     output, output_max_len, olen);
     return (int)status;
 }
@@ -176,6 +177,7 @@ static inline int bootutil_rsassa_pss_verify(const bootutil_rsa_context *ctx,
 #elif defined(MCUBOOT_USE_MBED_TLS)
 
 typedef mbedtls_rsa_context bootutil_rsa_context;
+typedef bootutil_rsa_context bootutil_key_exchange_ctx;
 
 static inline void bootutil_rsa_init(bootutil_rsa_context *ctx)
 {
@@ -232,10 +234,15 @@ bootutil_rsa_parse_private_key(bootutil_rsa_context *ctx, uint8_t **p, uint8_t *
         return -2;
     }
 
+#if !defined(TF_PSA_CRYPTO_VERSION_NUMBER)
+    /* version - "ver" field was removed from RSA structure starting from TF-PSA-Crypto. */
+    if (mbedtls_asn1_get_int(p, end, &ctx->MBEDTLS_CONTEXT_MEMBER(ver)) != 0) {
+        return -3;
+    }
+#endif /* !TF_PSA_CRYPTO_VERSION_NUMBER */
+
     /* Non-optional fields. */
-    if ( /* version */
-        mbedtls_asn1_get_int(p, end, &ctx->MBEDTLS_CONTEXT_MEMBER(ver)) != 0 ||
-         /* public modulus */
+    if ( /* public modulus */
         mbedtls_asn1_get_mpi(p, end, &ctx->MBEDTLS_CONTEXT_MEMBER(N)) != 0 ||
          /* public exponent */
         mbedtls_asn1_get_mpi(p, end, &ctx->MBEDTLS_CONTEXT_MEMBER(E)) != 0 ||
@@ -314,15 +321,6 @@ bootutil_rsa_parse_public_key(bootutil_rsa_context *ctx, uint8_t **p, uint8_t *e
     if (*p != end) {
         return -4;
     }
-
-    /* The Mbed TLS version is more than 2.6.1 */
-#if MBEDTLS_VERSION_NUMBER > 0x02060100
-    rc = mbedtls_rsa_import(ctx, &ctx->MBEDTLS_CONTEXT_MEMBER(N), NULL,
-                            NULL, NULL, &ctx->MBEDTLS_CONTEXT_MEMBER(E));
-    if (rc != 0) {
-        return -5;
-    }
-#endif
 
     rc = mbedtls_rsa_check_pubkey(ctx);
     if (rc != 0) {

@@ -63,12 +63,13 @@ struct Args {
 
 #[derive(Copy, Clone, Debug, Deserialize)]
 pub enum DeviceName {
-    Stm32f4, K64f, K64fBig, K64fMulti, Nrf52840, Nrf52840SpiFlash,
-    Nrf52840UnequalSlots, Nrf52840UnequalSlotsLargerSlot1,
+    Stm32f4, Stm32f4SpiFlash, K64f, K64fBig, K64fMulti, Nrf52840, Nrf52840SpiFlash,
+    Nrf52840UnequalSlots, Nrf52840UnequalSlotsLargerSlot1,PSOCEdgeE8x,
 }
 
 pub static ALL_DEVICES: &[DeviceName] = &[
     DeviceName::Stm32f4,
+    DeviceName::Stm32f4SpiFlash,
     DeviceName::K64f,
     DeviceName::K64fBig,
     DeviceName::K64fMulti,
@@ -76,12 +77,14 @@ pub static ALL_DEVICES: &[DeviceName] = &[
     DeviceName::Nrf52840SpiFlash,
     DeviceName::Nrf52840UnequalSlots,
     DeviceName::Nrf52840UnequalSlotsLargerSlot1,
+    DeviceName::PSOCEdgeE8x,
 ];
 
 impl fmt::Display for DeviceName {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match *self {
             DeviceName::Stm32f4 => "stm32f4",
+            DeviceName::Stm32f4SpiFlash => "stm32f4SpiFlash",
             DeviceName::K64f => "k64f",
             DeviceName::K64fBig => "k64fbig",
             DeviceName::K64fMulti => "k64fmulti",
@@ -89,6 +92,7 @@ impl fmt::Display for DeviceName {
             DeviceName::Nrf52840SpiFlash => "Nrf52840SpiFlash",
             DeviceName::Nrf52840UnequalSlots => "Nrf52840UnequalSlots",
             DeviceName::Nrf52840UnequalSlotsLargerSlot1 => "Nrf52840UnequalSlotsLargerSlot1",
+            DeviceName::PSOCEdgeE8x => "PSOCEdgeE8x",
         };
         f.write_str(name)
     }
@@ -200,7 +204,7 @@ impl RunStatus {
 
         // Creates a badly signed image in the secondary slot to check that
         // it is not upgraded to
-        let bad_secondary_slot_image = run.clone().make_bad_secondary_slot_image();
+        let bad_secondary_slot_image = run.clone().make_bad_secondary_slot_image(ImageManipulation::BadSignature);
 
         failed |= bad_secondary_slot_image.run_signfail_upgrade();
 
